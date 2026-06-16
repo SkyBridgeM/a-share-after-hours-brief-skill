@@ -1,136 +1,148 @@
 # A Share After-Hours Brief Skill
 
-面向 Codex / Agent Skills 的 **A 股个股盘后复盘 Skill**。
+[中文说明](README_zh.md)
 
-它不是荐股工具，也不是全市场复盘工具。它聚焦用户指定的一只或多只 A 股，生成移动端友好的 HTML 盘后复盘，并用本地 JSON 记录上一期判断，方便下次自动校验。
+A Codex / Agent Skills package for **after-hours A-share stock review**.
 
-## 适合什么场景
+This is not a stock-picking tool, a trading bot, or a full-market recap generator. It focuses on one or more user-specified A-share stocks, produces a mobile-friendly HTML review, and keeps portable local JSON history so the next run can verify the previous review.
 
-- 收盘后复盘一只 A 股：今天发生了什么，逻辑有没有变化
-- 复盘一个小股票池：比较几只股票当日表现、事件和后续观察条件
-- 校验上一次判断：上一期说要观察什么，今天是否被验证
-- 生成可归档、可转发的 HTML 盘后简报
-- 在提供持仓或交易记录时，顺带检查退出条件和纪律执行
+## When To Use It
 
-## 核心能力
+- Review one A-share stock after market close: what happened today and whether the logic changed.
+- Review a small stock pool: compare daily performance, events, and follow-up observation conditions.
+- Check the previous review: verify whether the last observation points were confirmed.
+- Generate an HTML brief that can be archived, shared, or attached to email.
+- Review position discipline when the user provides holdings or transaction records.
 
-- **个股 / 股票池盘后复盘**：支持一只或多只 A 股。
-- **上一期判断校验**：输出 `已验证 / 部分验证 / 未验证 / 已失效 / 无法判断`。
-- **本地 JSON 历史记录**：默认保存到 HTML 输出目录下的 `history/`。
-- **市场和行业背景**：只作对照，用于区分市场、行业和个股因素。
-- **重大事项和行业新闻**：按触发规则处理公告、业绩、会议、政策和行业变化。
-- **相关性计算**：基于两只股票 K 线收益率计算 Pearson 相关性。
-- **移动端 HTML 模板**：适合手机阅读和邮件附件。
-- **Gmail 草稿模板**：可生成简短邮件正文，并附 HTML 报告。
-- **持仓纪律检查**：仅在用户提供持仓、交易记录或明确要求时启用。
+## Core Features
 
-## 不做什么
+- **Single-stock or stock-pool review**: supports one or multiple A-share stocks.
+- **Previous-review verification**: uses `verified / partially_verified / not_verified / invalidated / unable_to_judge`.
+- **Portable JSON history**: defaults to a `history/` folder next to the HTML output.
+- **Market and industry baselines**: used only as context to separate market, sector, and stock-specific factors.
+- **Major events and industry news**: handles announcements, earnings, meetings, policy changes, and industry updates.
+- **Correlation calculation**: computes Pearson correlation from two stocks' K-line returns.
+- **Mobile-friendly HTML template**: designed for phone reading and email attachments.
+- **Gmail draft template**: can create a concise email body with the HTML report attached.
+- **Position discipline review**: enabled only when the user provides holdings, trade records, or explicitly asks for it.
 
-- 不提供默认买卖建议
-- 不执行交易
-- 不预测 1-3 日价格走势
-- 不做完整全市场复盘
-- 不默认生成周报或长期记忆
-- 不上传或集中存储用户历史记录
-- 不内置 Wind、Gmail 或任何 API 凭证
+## What It Does Not Do
 
-## 安装
+- Does not provide default buy or sell recommendations.
+- Does not execute trades.
+- Does not predict 1-3 day price movements.
+- Does not generate a complete market-wide recap by default.
+- Does not create weekly reviews or long-term memory by default.
+- Does not upload or centrally store user history.
+- Does not include Wind, Gmail, or other API credentials.
 
-### 使用 npm / npx
+## Installation
+
+### npm / npx
 
 ```bash
 npx a-share-after-hours-brief-skill install
 ```
 
-默认安装到：
+Default install location:
 
 ```text
 ~/.codex/skills/a-share-after-hours-brief/
 ```
 
-覆盖已有安装：
+Overwrite an existing installation:
 
 ```bash
 npx a-share-after-hours-brief-skill install --force
 ```
 
-安装到自定义 skills 目录：
+Install to a custom skills directory:
 
 ```bash
 npx a-share-after-hours-brief-skill install --target /path/to/skills
 ```
 
-### 从 GitHub 安装
+### GitHub
 
-如果 npm 暂时不可用，也可以直接从 GitHub 安装：
+If npm is not available, install directly from GitHub:
 
 ```bash
 npx github:SkyBridgeM/a-share-after-hours-brief-skill install
 ```
 
-### 手动安装
+### Manual
 
-复制整个目录到 Codex skills 目录：
+Copy the folder into your Codex skills directory:
 
 ```bash
 cp -R a-share-after-hours-brief ~/.codex/skills/
 ```
 
-## 使用示例
+## Usage Examples
+
+```text
+Review today's CATL after market close
+```
+
+```text
+Generate an after-hours HTML brief for these two A-share stocks
+```
+
+```text
+Verify the previous review and list next-trading-day observation conditions
+```
+
+```text
+Review this A-share watchlist and create a Gmail draft
+```
+
+Chinese prompts are fully supported, for example:
 
 ```text
 复盘今天的宁德时代
 ```
 
 ```text
-今天A股股票A和股票B盘后总结，输出HTML
-```
-
-```text
 校验上次判断，列出下一交易日验证条件
 ```
 
-```text
-复盘这几只A股，并创建Gmail草稿
-```
+## Output
 
-## 输出内容
+The generated HTML review usually includes:
 
-生成的 HTML 复盘通常包括：
+1. Today's conclusion
+2. Concise market background
+3. Previous-review verification
+4. Stock-pool overview
+5. Individual stock review cards
+6. Major events
+7. Industry news
+8. Correlation analysis
+9. Next-trading-day observation points
+10. Optional position discipline review
 
-1. 今日结论
-2. 精简市场背景
-3. 上一期判断验证
-4. 股票池概览
-5. 个股复盘卡片
-6. 重大事项
-7. 行业新闻
-8. 相关性
-9. 下一交易日重点观察
-10. 可选持仓纪律检查
+The "next-trading-day observation" section only lists verifiable variables and conditions. It does not provide a directional price forecast.
 
-其中“下一交易日重点观察”只列可验证条件，不给确定方向或价格预测。
+## JSON History
 
-## 历史 JSON
-
-历史记录默认保存在 HTML 输出目录旁：
+History defaults to a folder next to the HTML output:
 
 ```text
 reports/
-├── 2026-06-16_A股盘后复盘.html
+├── 2026-06-16_A-share-after-hours-brief.html
 └── history/
     └── 2026-06-16__300750-SZ_600519-SH.json
 ```
 
-设计原则：
+Design principles:
 
-- JSON 是唯一结构化历史数据源
-- 不生成 Markdown 历史日志
-- 不保存绝对路径
-- 整个报告目录可以直接移动或备份
-- 同日同股票池重复运行时，会更新对应 JSON
+- JSON is the only structured history source.
+- No Markdown history log is generated.
+- No absolute paths are stored.
+- The whole report directory can be moved or backed up.
+- Re-running the same stock pool on the same day updates the matching JSON record.
 
-## 目录结构
+## Project Structure
 
 ```text
 a-share-after-hours-brief/
@@ -151,15 +163,15 @@ a-share-after-hours-brief/
     └── review_journal.py
 ```
 
-## 脚本说明
+## Scripts
 
-计算两只股票收益率相关性：
+Calculate return correlation for two stocks:
 
 ```bash
 python3 scripts/correlation.py stock_a.json stock_b.json
 ```
 
-查找上一期历史记录：
+Look up the previous history record:
 
 ```bash
 python3 scripts/review_journal.py lookup \
@@ -168,72 +180,72 @@ python3 scripts/review_journal.py lookup \
   --stocks 300750.SZ,600519.SH
 ```
 
-生成并保存当前历史记录：
+Build and save the current history record:
 
 ```bash
 python3 scripts/review_journal.py build \
   --input current-draft.json \
-  --output-html ./reports/2026-06-16_A股盘后复盘.html
+  --output-html ./reports/2026-06-16_A-share-after-hours-brief.html
 ```
 
-## 依赖
+## Requirements
 
 - Python 3.10+
-- Node.js 18+，仅用于 npm 安装脚本
-- Codex / Agent Skills 兼容客户端
-- Wind 数据能力，用于 A 股行情、K 线、公告和新闻
-- Gmail 连接器，仅在需要创建 Gmail 草稿时使用
+- Node.js 18+, only for the npm installer
+- A Codex / Agent Skills compatible client
+- Wind data capability for A-share quotes, K-lines, announcements, and news
+- Gmail connector, only when Gmail draft creation is requested
 
-内置 Python 脚本只使用标准库。
+The bundled Python scripts use only the standard library.
 
-## 本地校验
+## Local Checks
 
 ```bash
 npm run check
 ```
 
-也可以单独检查 Python 脚本：
+You can also check the Python scripts directly:
 
 ```bash
 PYTHONPYCACHEPREFIX=/tmp/a-share-after-hours-brief-skill-pycache \
 python3 -m py_compile scripts/review_journal.py scripts/correlation.py
 ```
 
-如果你有 Skill Creator 的验证脚本：
+If you have the Skill Creator validator:
 
 ```bash
 python3 /path/to/skill-creator/scripts/quick_validate.py ./a-share-after-hours-brief
 ```
 
-## 数据和隐私
+## Data And Privacy
 
-不要提交生成的 HTML 报告、`history/*.json`、持仓记录或交易记录。本仓库只发布可复用的 Skill 逻辑、模板和说明文件。
+Do not commit generated HTML reports, `history/*.json`, holding records, or trade records. This repository only publishes reusable skill logic, templates, and documentation.
 
-`.gitignore` 已默认排除常见输出目录和历史数据。
+`.gitignore` excludes common output folders and history data by default.
 
-## 发布
+## Publishing
 
-当前包名：
+Package name:
 
 ```text
 a-share-after-hours-brief-skill
 ```
 
-安装命令：
+Install command:
 
 ```bash
 npx a-share-after-hours-brief-skill install
 ```
 
-GitHub 仓库：
+GitHub repository:
 
 ```text
 https://github.com/SkyBridgeM/a-share-after-hours-brief-skill
 ```
 
-## 免责声明
+## Disclaimer
 
-本 Skill 仅用于研究记录和工作流自动化，不构成投资建议、交易指令或收益承诺。所有投资决策由用户自行承担。
+This Skill is for research notes and workflow automation only. It is not investment advice, a trading instruction, or a promise of returns. Users are responsible for their own investment decisions.
 
 ## License
 

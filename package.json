@@ -23,6 +23,7 @@
     "scripts",
     "bin",
     "README.md",
+    "README_zh.md",
     "LICENSE"
   ],
   "scripts": {
