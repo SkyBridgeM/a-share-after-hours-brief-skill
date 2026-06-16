@@ -50,6 +50,8 @@ Each current stock must define next-session conditions with stable IDs:
 }
 ```
 
+Stable condition IDs are machine-facing. Store them in JSON and use them for next-run matching, but do not show them in the polished HTML or Gmail summary. In user-facing output, show only natural-language conditions and evidence.
+
 When a prior record exists, add `condition_results` to the current stock:
 
 ```json

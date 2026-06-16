@@ -30,9 +30,12 @@ Include these sections in order:
 - Use embedded CSS, no remote images/fonts, and print-friendly contrast.
 - Use visual hierarchy: blue hero header, colored panels, metric cards, status pills, accent borders on stock cards.
 - Let important event and condition-check sections breathe; do not compress away useful judgment.
+- Hide implementation details from user-facing output: condition IDs, raw JSON keys, Wind raw fields like `_DATE`, template variables, script names, and local absolute paths.
+- Translate internal enums before display (`mixed` -> `混合因素`, `stock_specific` -> `个股自身因素`, `sector` -> `行业/板块因素`, `market_beta` -> `市场因素`, `unknown` -> `暂无法归因`); show condition checks as natural-language conditions/evidence only.
 
 ## Gmail Summary Rules
 
 - Keep body short: conclusion, stock list, previous-review summary, key changes, next-session watch, and note to open attachment.
 - Do not include CSS, HTML tables, or rich layout in Gmail body.
+- Do not include internal IDs, raw field names, script names, or local paths.
 - Always attach the polished `.html` when creating a Gmail draft.

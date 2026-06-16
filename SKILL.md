@@ -81,6 +81,7 @@ Before delivery, check:
 - Correlation uses returns, not raw prices, and reports sample size.
 - Previous-review conditions use current facts and valid IDs from the prior record.
 - History JSON contains no absolute paths or directional outlook fields.
+- User-facing HTML/Gmail does not expose internal condition IDs, raw provider field names, raw JSON keys, template variables, script names, or local absolute paths.
 - Position review appears only when holdings/trades or an explicit request triggered it.
 - HTML opens correctly, is readable on mobile, includes disclaimer, and uses the polished attachment template.
 - Gmail draft, if created, has a readable plain summary body and the HTML attachment; do not imply it was sent.
