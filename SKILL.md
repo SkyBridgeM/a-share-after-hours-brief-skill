@@ -10,6 +10,7 @@ Create a practical Chinese after-hours review for one or more specified A-share 
 ## Defaults
 
 - Report date: use the user-specified date; otherwise use today's date. Convert relative dates such as `昨天` or `上周五` into concrete dates and show the date in the report.
+- Output path: if the user does not specify one, save under `reports/` in the current workspace with a date-and-stock filename.
 - Length: standard multi-stock brief is 2-4 HTML pages; use 1-2 pages only when the user asks for a short version.
 - Correlation: compare the user-specified pair; if omitted, compare the first two stocks and label the assumption.
 - History: `history=on`, `compare_previous=true`. Save JSON under `<HTML output directory>/history/` unless `history_dir` is supplied.
