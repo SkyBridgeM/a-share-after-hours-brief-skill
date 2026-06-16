@@ -1,0 +1,35 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local environments
+.env
+.venv/
+venv/
+
+# Generated reports and private review history
+history/
+reports/
+outputs/
+*.html
+*.json
+*.csv
+
+# Keep repository metadata and examples if explicitly added later
+!package.json
+!package-lock.json
+!assets/*.html
+!examples/**/*.json
+!examples/**/*.csv
+
+# Logs and temporary files
+*.log
+*.tmp
+tmp/
+temp/

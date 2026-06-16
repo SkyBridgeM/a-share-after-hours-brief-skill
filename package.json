@@ -1,0 +1,43 @@
+{
+  "name": "a-share-after-hours-brief-skill",
+  "version": "0.1.0",
+  "description": "Codex skill for A-share after-hours stock review with portable JSON history.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SkyBridgeM/a-share-after-hours-brief-skill.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SkyBridgeM/a-share-after-hours-brief-skill/issues"
+  },
+  "homepage": "https://github.com/SkyBridgeM/a-share-after-hours-brief-skill#readme",
+  "bin": {
+    "a-share-after-hours-brief-skill": "bin/install.js"
+  },
+  "files": [
+    "SKILL.md",
+    "agents",
+    "assets",
+    "references",
+    "scripts",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "node bin/install.js --dry-run && PYTHONPYCACHEPREFIX=/tmp/a-share-after-hours-brief-skill-pycache python3 -m py_compile scripts/review_journal.py scripts/correlation.py"
+  },
+  "keywords": [
+    "codex",
+    "skill",
+    "agent-skill",
+    "a-share",
+    "stock",
+    "finance",
+    "china"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

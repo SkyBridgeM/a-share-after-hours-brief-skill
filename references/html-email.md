@@ -1,0 +1,38 @@
+# HTML and Gmail Delivery
+
+Use concise Chinese. Standard multi-stock reports can be 2-4 HTML pages; use 1-2 pages only when the user asks for a short version.
+
+## Sections
+
+Include these sections in order:
+
+1. Header: title, date, stock list, overall judgment, one-sentence conclusion.
+2. Compact market context: broad benchmark, relevant style/sector benchmark, breadth/turnover when available, and attribution use.
+3. Previous judgment review: one row/card per overlapping stock; show prior date, prior judgment, status, evidence, and adjustment. Show `无历史基线` for new stocks.
+4. Portfolio overview: stock, code, close/change, turnover/turnover rate, key update, thesis impact.
+5. Stock cards: today's performance, information update, attribution, thesis impact.
+6. Major events: whether triggered, event type, event skill used, thesis impact.
+7. Industry news: material sector news, relevance, source links.
+8. Correlation: pair, window, observation count, Pearson correlation, label, caveat.
+9. Next-session watch: observable variables, confirmation conditions, and invalidation conditions. Do not predict direction or price.
+10. Optional position review: original thesis, exit conditions, trigger status, reported execution, and discipline gap.
+11. Source and disclaimer.
+
+## Deliverables
+
+- Polished report: static mobile-friendly `.html` using `assets/brief-template.html`.
+- Gmail draft: plain summary using `assets/plain-email-summary-template.md`, with the polished `.html` attached.
+- Do not send polished HTML as Gmail body through the connector.
+
+## HTML Attachment Rules
+
+- Mobile-first: single-column on phones; avoid wide tables when cards/key-value blocks work better.
+- Use embedded CSS, no remote images/fonts, and print-friendly contrast.
+- Use visual hierarchy: blue hero header, colored panels, metric cards, status pills, accent borders on stock cards.
+- Let important event and condition-check sections breathe; do not compress away useful judgment.
+
+## Gmail Summary Rules
+
+- Keep body short: conclusion, stock list, previous-review summary, key changes, next-session watch, and note to open attachment.
+- Do not include CSS, HTML tables, or rich layout in Gmail body.
+- Always attach the polished `.html` when creating a Gmail draft.

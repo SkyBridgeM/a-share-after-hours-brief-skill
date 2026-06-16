@@ -1,0 +1,29 @@
+{{TITLE}}
+{{DATE}} · {{STOCK_LIST}}
+
+结论：{{JUDGMENT}}｜{{ONE_SENTENCE}}
+
+市场背景
+{{PLAIN_MARKET_CONTEXT}}
+
+上一期判断验证
+{{PLAIN_PREVIOUS_REVIEW}}
+
+组合概览
+{{PLAIN_PORTFOLIO_SUMMARY}}
+
+重大事项
+{{PLAIN_EVENTS_SUMMARY}}
+
+行业新闻
+{{PLAIN_INDUSTRY_NEWS_SUMMARY}}
+
+相关性
+{{PLAIN_CORRELATION_SUMMARY}}
+
+下一交易日重点观察
+{{PLAIN_NEXT_SESSION}}
+
+{{PLAIN_POSITION_REVIEW}}
+
+完整排版版 HTML 已作为附件附上。数据来源于万得 Wind 金融数据服务。仅供研究记录，不构成投资建议。

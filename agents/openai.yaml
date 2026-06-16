@@ -1,0 +1,8 @@
+interface:
+  display_name: "A股盘后简报"
+  short_description: "生成带跨日判断校验的A股个股盘后HTML复盘"
+  brand_color: "#2563EB"
+  default_prompt: "请用 $a-share-after-hours-brief 复盘今天的A股股票A和股票B，校验上一期判断，列出下一交易日验证条件，输出HTML并创建Gmail草稿。"
+
+policy:
+  allow_implicit_invocation: true
