@@ -21,6 +21,8 @@ python3 scripts/kline_features.py stock.json \
 
 Allowed `--adjustment` values: `forward`, `backward`, `none`, `unknown`. Default is `unknown`. Do not infer the adjustment basis unless the data source makes it explicit.
 
+Use `--pre-close-adjustment-verified` only when metadata confirms that `pre_close` uses the same adjustment basis as the OHLC series. Without that flag, sequential calculations prefer the previous bar's close and only use `pre_close` when no previous bar exists.
+
 ## Input handling
 
 The script reads JSON lists, JSON objects containing `data`, `rows`, `items`, or `result`, and CSV files.
@@ -38,6 +40,16 @@ Supported aliases include:
 
 Dates are normalized to `YYYY-MM-DD` from `YYYY-MM-DD`, `YYYYMMDD`, `YYYY/MM/DD`, or timestamps beginning with those forms. Rows are sorted chronologically. Duplicate dates are handled deterministically by keeping the last row and emitting a warning. Turnover rate is not treated as volume.
 
+Data quality is reported separately for price and volume:
+
+- `price_data_status`: `good`, `usable`, or `insufficient`.
+- `volume_data_status`: `good` when volume coverage is at least 95%, `usable` from 50% to below 95%, and `insufficient` below 50%.
+- `volume_coverage_ratio`: valid volume observations divided by valid price observations.
+
+The overall `data_quality.status` cannot be `good` when volume quality is not good. Price-only feature groups may still be usable when volume is incomplete, but volume-derived fields return null or `insufficient_data` when coverage is below 50%.
+
+Warnings are aggregated as `warning_counts` and capped `warning_examples`; `warnings_truncated` marks omitted examples.
+
 ## Feature formulas
 
 - Period returns use trading observations: `latest_close / close_n_observations_ago - 1`.
@@ -45,12 +57,14 @@ Dates are normalized to `YYYY-MM-DD` from `YYYY-MM-DD`, `YYYYMMDD`, `YYYY/MM/DD`
 - MA slope is the percentage change in the moving average over the last five available MA observations.
 - Close location is `(close - low) / (high - low)`. Zero-range candles return null ratios and `close_zone: "zero_range"`.
 - Volume ratios compare latest volume with prior 5-day and prior 20-day average volume, excluding the latest day.
-- Historical percentiles use the rank of the latest value within the available recent window. Volume percentile requires 60 volume observations; volatility/range percentiles require at least 20 observations.
+- `percentile_vs_prior_60d` compares the latest volume against the prior 60 valid volume observations and excludes the latest day. `percentile_60d` is retained as a deprecated compatibility alias.
+- Historical volatility/range percentiles use the rank of the latest value within the available recent window and require at least 20 observations.
 - Prior range levels exclude the latest day.
-- True range is `max(high-low, abs(high-prev_close), abs(low-prev_close))`.
+- True range is `max(high-low, abs(high-previous_close), abs(low-previous_close))`. The previous close source is the previous K-line bar by default; `pre_close` is used only when no previous bar exists or when `--pre-close-adjustment-verified` is supplied.
 - ATR14 is the average of the latest 14 true ranges.
 - 20-day volatility is the sample standard deviation of the latest 20 daily returns. Annualized volatility uses `sqrt(252)`.
-- Relative strength uses aligned trading dates only. It reports stock return minus benchmark or sector return for 1, 5, and 20 trading observations when available.
+- Daily range percentile uses `(current_high - current_low) / previous_bar_close` for real previous-current pairs only. The first bar in a truncated window is not assigned a synthetic range ratio.
+- Relative strength uses aligned trading dates only. It reports stock return minus benchmark and stock return minus sector return separately for 1, 5, and 20 trading observations when available. Optional comparison data that cannot be parsed is marked unusable without failing the stock calculation.
 
 ## Deterministic states
 
@@ -77,6 +91,13 @@ Volume states:
 - `normal`: available ratios do not meet those thresholds.
 - `insufficient_data`: volume data is missing or too short.
 
+Volume state is descriptive. It is not used as a direct positive or negative score. Directional technical scoring uses price-volume interaction instead:
+
+- `price_volume_score` is positive when constructive price action is confirmed by above-average or high volume.
+- High-volume down days, close breakdowns with volume, and failed breakouts with volume are negative.
+- Low-volume pullbacks are neutral unless other price evidence is weak.
+- Missing or insufficient volume leaves `price_volume_score` null.
+
 Range states:
 
 - `close_breakout`: latest close is above the prior 20-day highest close.
@@ -100,10 +121,13 @@ The script reports component scores from -2 to +2:
 
 - `trend_score`: strong uptrend 2, uptrend 1, mixed 0, downtrend -1, strong downtrend -2.
 - `price_action_score`: range breakout/recovery/breakdown state adjusted one step by the latest close zone.
-- `volume_score`: high 2, above-average 1, normal 0, below-average -1.
-- `relative_strength_score`: 20-day relative return difference uses +/-2% and +/-5% thresholds.
+- `price_volume_score`: price-volume interaction score; raw volume level is not scored by itself.
+- `benchmark_relative_strength_score`: 20-day stock return minus benchmark return, using +/-2% and +/-5% thresholds.
+- `sector_relative_strength_score`: 20-day stock return minus sector return, using +/-2% and +/-5% thresholds.
 
 Missing dimensions remain null rather than becoming neutral. Aggregate classifications are descriptive: `constructive`, `slightly_constructive`, `mixed`, `slightly_weak`, `weak`, or `insufficient_data`.
+
+When benchmark and sector relative strength conflict, use `relative_strength_conflict: true` as mixed evidence. Sector relative strength is the better signal for stock-specific competitiveness; benchmark relative strength is market beta context. Do not collapse one into the other in the written report.
 
 ## Report usage
 

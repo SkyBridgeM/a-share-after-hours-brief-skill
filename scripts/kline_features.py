@@ -17,6 +17,8 @@ from typing import Any
 
 SCHEMA_VERSION = 1
 ANNUALIZATION_FACTOR = 252
+WARNING_EXAMPLE_LIMIT = 10
+PRE_CLOSE_CONFLICT_THRESHOLD = 0.001
 ALLOWED_ADJUSTMENTS = {"forward", "backward", "none", "unknown"}
 DATE_KEYS = ("date", "trade_date", "datetime", "日期", "交易日期", "时间")
 OPEN_KEYS = ("open", "open_price", "开盘价", "开盘")
@@ -38,6 +40,30 @@ class Bar:
     volume: float | None = None
     amount: float | None = None
     pre_close: float | None = None
+
+
+@dataclass
+class WarningCollector:
+    counts: dict[str, int]
+    examples: list[dict[str, str]]
+    total: int = 0
+
+    def add(self, reason: str, row_date: str | None = None) -> None:
+        self.total += 1
+        self.counts[reason] = self.counts.get(reason, 0) + 1
+        if len(self.examples) < WARNING_EXAMPLE_LIMIT:
+            item = {"reason": reason}
+            if row_date:
+                item["date"] = row_date
+            self.examples.append(item)
+
+    def summary(self) -> dict[str, Any]:
+        return {
+            "warning_counts": dict(sorted(self.counts.items())),
+            "warning_examples": self.examples,
+            "warnings_truncated": self.total > len(self.examples),
+            "warnings": self.examples,
+        }
 
 
 def rounded(value: float | None, digits: int = 6) -> float | None:
@@ -112,7 +138,7 @@ def load_bars(path: Path, adjustment: str = "unknown") -> tuple[list[Bar], dict[
     rows = load_rows(path)
     by_date: dict[str, Bar] = {}
     duplicate_dates: list[str] = []
-    warnings: list[dict[str, str]] = []
+    warnings = WarningCollector({}, [])
     missing_ohlc = {"open": 0, "high": 0, "low": 0, "close": 0}
     missing_volume = 0
     invalid_price_rows = 0
@@ -123,12 +149,12 @@ def load_bars(path: Path, adjustment: str = "unknown") -> tuple[list[Bar], dict[
     for row in rows:
         if not isinstance(row, dict):
             rows_skipped += 1
-            warnings.append({"reason": "row is not an object"})
+            warnings.add("row_not_object")
             continue
         row_date = normalize_date(pick(row, DATE_KEYS))
         if row_date is None:
             rows_skipped += 1
-            warnings.append({"reason": "missing or malformed date"})
+            warnings.add("missing_or_malformed_date")
             continue
         if previous_seen_date is not None and row_date < previous_seen_date:
             chronological_corrections += 1
@@ -145,13 +171,13 @@ def load_bars(path: Path, adjustment: str = "unknown") -> tuple[list[Bar], dict[
         if any(value is None for value in values.values()):
             rows_skipped += 1
             invalid_price_rows += 1
-            warnings.append({"date": row_date, "reason": "missing or malformed OHLC"})
+            warnings.add("missing_or_malformed_ohlc", row_date)
             continue
         assert open_ is not None and high is not None and low is not None and close is not None
         if high < max(open_, low, close) or low > min(open_, high, close):
             rows_skipped += 1
             invalid_price_rows += 1
-            warnings.append({"date": row_date, "reason": "inconsistent OHLC range"})
+            warnings.add("inconsistent_ohlc_range", row_date)
             continue
 
         volume = parse_number(pick(row, VOLUME_KEYS), positive=False)
@@ -165,7 +191,7 @@ def load_bars(path: Path, adjustment: str = "unknown") -> tuple[list[Bar], dict[
         bar = Bar(row_date, open_, high, low, close, volume, amount, pre_close)
         if row_date in by_date:
             duplicate_dates.append(row_date)
-            warnings.append({"date": row_date, "reason": "duplicate date; last row kept"})
+            warnings.add("duplicate_date_last_row_kept", row_date)
         by_date[row_date] = bar
 
     bars = [by_date[key] for key in sorted(by_date)]
@@ -194,17 +220,33 @@ def data_quality(
     invalid_price_rows: int,
     chronological_corrections: int,
     adjustment: str,
-    warnings: list[dict[str, str]],
+    warnings: WarningCollector,
 ) -> dict[str, Any]:
     valid_rows = len(bars)
+    volume_coverage_ratio = (valid_rows - missing_volume) / valid_rows if valid_rows else 0.0
+    if valid_rows < 5:
+        price_data_status = "insufficient"
+    elif rows_skipped or valid_rows < 20:
+        price_data_status = "usable"
+    else:
+        price_data_status = "good"
+    if volume_coverage_ratio >= 0.95:
+        volume_data_status = "good"
+    elif volume_coverage_ratio >= 0.50:
+        volume_data_status = "usable"
+    else:
+        volume_data_status = "insufficient"
     if valid_rows < 5:
         status = "insufficient"
-    elif rows_skipped or valid_rows < 20 or missing_volume == rows_read:
+    elif price_data_status != "good" or volume_data_status != "good":
         status = "usable_with_limitations"
     else:
         status = "good"
-    return {
+    result = {
         "status": status,
+        "price_data_status": price_data_status,
+        "volume_data_status": volume_data_status,
+        "volume_coverage_ratio": rounded(volume_coverage_ratio),
         "rows_read": rows_read,
         "valid_rows": valid_rows,
         "rows_skipped": rows_skipped,
@@ -222,8 +264,26 @@ def data_quality(
             "return_20d": valid_rows >= 21,
             "return_60d": valid_rows >= 61,
         },
-        "warnings": warnings,
     }
+    result.update(warnings.summary())
+    return result
+
+
+def merge_warning_summary(quality: dict[str, Any], warnings: WarningCollector) -> None:
+    summary = warnings.summary()
+    counts = dict(quality.get("warning_counts", {}))
+    for reason, count in summary["warning_counts"].items():
+        counts[reason] = counts.get(reason, 0) + count
+    examples = list(quality.get("warning_examples", []))
+    examples.extend(summary["warning_examples"])
+    quality["warning_counts"] = dict(sorted(counts.items()))
+    quality["warning_examples"] = examples[:WARNING_EXAMPLE_LIMIT]
+    quality["warnings"] = quality["warning_examples"]
+    quality["warnings_truncated"] = (
+        bool(quality.get("warnings_truncated"))
+        or bool(summary["warnings_truncated"])
+        or len(examples) > WARNING_EXAMPLE_LIMIT
+    )
 
 
 def period_return(bars: list[Bar], days: int) -> float | None:
@@ -309,25 +369,25 @@ def trend_section(bars: list[Bar], ma: dict[str, Any], quality_status: str) -> d
     above = [period for period in (5, 10, 20) if ma.get(f"ma{period}") and close > ma[f"ma{period}"]]
     below = [period for period in (5, 10, 20) if ma.get(f"ma{period}") and close < ma[f"ma{period}"]]
     if len(above) == 3:
-        evidence.append("close_above_ma5_ma10_ma20")
+        evidence.append("trend:close_above_ma5_ma10_ma20")
     if len(below) == 3:
-        evidence.append("close_below_ma5_ma10_ma20")
+        evidence.append("trend:close_below_ma5_ma10_ma20")
     if ma["ma5"] and ma["ma10"] and ma["ma20"] and ma["ma5"] > ma["ma10"] > ma["ma20"]:
-        evidence.append("ma5_above_ma10_above_ma20")
+        evidence.append("trend:ma5_above_ma10_above_ma20")
     if ma["ma5"] and ma["ma10"] and ma["ma20"] and ma["ma5"] < ma["ma10"] < ma["ma20"]:
-        evidence.append("ma5_below_ma10_below_ma20")
+        evidence.append("trend:ma5_below_ma10_below_ma20")
     slope20 = ma.get("ma20_slope_5obs")
     if slope20 is not None and slope20 > 0:
-        evidence.append("ma20_slope_positive")
+        evidence.append("trend:ma20_slope_positive")
     if slope20 is not None and slope20 < 0:
-        evidence.append("ma20_slope_negative")
+        evidence.append("trend:ma20_slope_negative")
 
     close_vs_ma20 = ma.get("close_vs_ma20")
-    if all(item in evidence for item in ("close_above_ma5_ma10_ma20", "ma5_above_ma10_above_ma20")) and slope20 and slope20 > 0.005 and close_vs_ma20 and close_vs_ma20 > 0.03:
+    if all(item in evidence for item in ("trend:close_above_ma5_ma10_ma20", "trend:ma5_above_ma10_above_ma20")) and slope20 and slope20 > 0.005 and close_vs_ma20 and close_vs_ma20 > 0.03:
         state = "strong_uptrend"
     elif len(above) >= 2 and slope20 is not None and slope20 >= 0:
         state = "uptrend"
-    elif all(item in evidence for item in ("close_below_ma5_ma10_ma20", "ma5_below_ma10_below_ma20")) and slope20 and slope20 < -0.005 and close_vs_ma20 and close_vs_ma20 < -0.03:
+    elif all(item in evidence for item in ("trend:close_below_ma5_ma10_ma20", "trend:ma5_below_ma10_below_ma20")) and slope20 and slope20 < -0.005 and close_vs_ma20 and close_vs_ma20 < -0.03:
         state = "strong_downtrend"
     elif len(below) >= 2 and slope20 is not None and slope20 <= 0:
         state = "downtrend"
@@ -336,7 +396,30 @@ def trend_section(bars: list[Bar], ma: dict[str, Any], quality_status: str) -> d
     return {"state": state, "evidence": evidence}
 
 
-def latest_candle_section(bars: list[Bar]) -> dict[str, Any]:
+def previous_close_reference(
+    bars: list[Bar],
+    index: int,
+    warnings: WarningCollector | None = None,
+    use_verified_pre_close: bool = False,
+) -> tuple[float | None, str]:
+    bar = bars[index]
+    previous_close = bars[index - 1].close if index > 0 else None
+    if bar.pre_close is not None and previous_close is not None:
+        diff = abs(bar.pre_close / previous_close - 1.0)
+        if diff > PRE_CLOSE_CONFLICT_THRESHOLD and warnings is not None:
+            warnings.add("conflicting_pre_close_vs_previous_bar_close", bar.date)
+    if bar.pre_close is not None and (previous_close is None or use_verified_pre_close):
+        return bar.pre_close, "verified_pre_close" if use_verified_pre_close else "pre_close_no_previous_bar"
+    if previous_close is not None:
+        return previous_close, "previous_bar_close"
+    return None, "unavailable"
+
+
+def latest_candle_section(
+    bars: list[Bar],
+    warnings: WarningCollector | None = None,
+    use_verified_pre_close: bool = False,
+) -> dict[str, Any]:
     if not bars:
         return {}
     latest = bars[-1]
@@ -364,7 +447,9 @@ def latest_candle_section(bars: list[Bar]) -> dict[str, Any]:
         session_shape = "low_open_high_close"
     else:
         session_shape = "neutral"
-    reference_close = latest.pre_close or (previous.close if previous else None)
+    reference_close, reference_source = previous_close_reference(
+        bars, len(bars) - 1, warnings, use_verified_pre_close
+    )
     return {
         "close_location": rounded(close_location),
         "body_size": rounded(abs(latest.close - latest.open)),
@@ -374,6 +459,7 @@ def latest_candle_section(bars: list[Bar]) -> dict[str, Any]:
         "lower_shadow_size": rounded(min(latest.open, latest.close) - latest.low),
         "lower_shadow_ratio": rounded(lower_shadow_ratio),
         "gap_from_previous_close": rounded(latest.open / reference_close - 1.0 if reference_close else None),
+        "previous_close_source": reference_source,
         "session_shape": session_shape,
         "close_zone": close_zone,
         "thresholds": {
@@ -391,15 +477,21 @@ def percentile(values: list[float], latest: float, min_count: int) -> float | No
     return rank / len(sorted_values)
 
 
-def volume_section(bars: list[Bar], returns_: list[tuple[str, float]]) -> dict[str, Any]:
-    if not bars or bars[-1].volume is None:
+def volume_section(bars: list[Bar], returns_: list[tuple[str, float]], volume_data_status: str) -> dict[str, Any]:
+    insufficient = {
+        "ratio_vs_prior_5d": None,
+        "ratio_vs_prior_20d": None,
+        "percentile_vs_prior_60d": None,
+        "percentile_60d": None,
+        "percentile_60d_deprecated": "use percentile_vs_prior_60d; latest day is excluded from the comparison window",
+        "avg_volume_positive_return_days": None,
+        "avg_volume_negative_return_days": None,
+        "state": "insufficient_data",
+    }
+    if volume_data_status == "insufficient" or not bars or bars[-1].volume is None:
         return {
-            "ratio_vs_prior_5d": None,
-            "ratio_vs_prior_20d": None,
-            "percentile_60d": None,
-            "avg_volume_positive_return_days": None,
-            "avg_volume_negative_return_days": None,
-            "state": "insufficient_data",
+            **insufficient,
+            "limitation": "volume coverage is below 50% or latest volume is missing",
         }
     latest = bars[-1].volume
     assert latest is not None
@@ -408,8 +500,8 @@ def volume_section(bars: list[Bar], returns_: list[tuple[str, float]]) -> dict[s
     prior_20 = prior_volumes[-20:]
     ratio5 = latest / average(prior_5) if len(prior_5) == 5 and average(prior_5) else None
     ratio20 = latest / average(prior_20) if len(prior_20) == 20 and average(prior_20) else None
-    latest_60 = [bar.volume for bar in bars[-60:] if bar.volume is not None]
-    volume_percentile = percentile(latest_60, latest, 60)
+    prior_60 = prior_volumes[-60:]
+    volume_percentile = percentile(prior_60, latest, 60)
 
     by_date = {bar.date: bar.volume for bar in bars}
     positive = [by_date[d] for d, value in returns_ if value > 0 and by_date.get(d) is not None]
@@ -430,12 +522,14 @@ def volume_section(bars: list[Bar], returns_: list[tuple[str, float]]) -> dict[s
     return {
         "ratio_vs_prior_5d": rounded(ratio5),
         "ratio_vs_prior_20d": rounded(ratio20),
+        "percentile_vs_prior_60d": rounded(volume_percentile),
         "percentile_60d": rounded(volume_percentile),
+        "percentile_60d_deprecated": "use percentile_vs_prior_60d; latest day is excluded from the comparison window",
         "avg_volume_positive_return_days": rounded(avg_positive),
         "avg_volume_negative_return_days": rounded(avg_negative),
         "state": state,
         "thresholds": {
-            "high": "ratio_vs_prior_20d >= 2.0 or percentile_60d >= 0.90",
+            "high": "ratio_vs_prior_20d >= 2.0 or percentile_vs_prior_60d >= 0.90",
             "above_average": "ratio_vs_prior_20d >= 1.2 or ratio_vs_prior_5d >= 1.2",
             "below_average": "ratio_vs_prior_20d <= 0.8 or ratio_vs_prior_5d <= 0.8",
         },
@@ -555,10 +649,14 @@ def stddev(values: list[float]) -> float | None:
     return math.sqrt(sum((value - mean) ** 2 for value in values) / (len(values) - 1))
 
 
-def true_ranges(bars: list[Bar]) -> list[tuple[str, float]]:
+def true_ranges(
+    bars: list[Bar],
+    warnings: WarningCollector | None = None,
+    use_verified_pre_close: bool = False,
+) -> list[tuple[str, float]]:
     ranges: list[tuple[str, float]] = []
     for index, bar in enumerate(bars):
-        previous_close = bar.pre_close or (bars[index - 1].close if index > 0 else None)
+        previous_close, _ = previous_close_reference(bars, index, warnings, use_verified_pre_close)
         if previous_close:
             value = max(bar.high - bar.low, abs(bar.high - previous_close), abs(bar.low - previous_close))
         else:
@@ -567,21 +665,31 @@ def true_ranges(bars: list[Bar]) -> list[tuple[str, float]]:
     return ranges
 
 
-def volatility_section(bars: list[Bar], returns_: list[tuple[str, float]]) -> dict[str, Any]:
+def daily_range_ratios(bars: list[Bar]) -> list[tuple[str, float]]:
+    ranges: list[tuple[str, float]] = []
+    for previous, current in zip(bars, bars[1:]):
+        ranges.append((current.date, (current.high - current.low) / previous.close))
+    return ranges
+
+
+def volatility_section(
+    bars: list[Bar],
+    returns_: list[tuple[str, float]],
+    warnings: WarningCollector | None = None,
+    use_verified_pre_close: bool = False,
+) -> dict[str, Any]:
     latest_return = returns_[-1][1] if returns_ else None
     recent_returns = [value for _, value in returns_[-20:]]
     vol20 = stddev(recent_returns) if len(recent_returns) == 20 else None
     annualized = vol20 * math.sqrt(ANNUALIZATION_FACTOR) if vol20 is not None else None
-    tr = true_ranges(bars)
+    tr = true_ranges(bars, warnings, use_verified_pre_close)
     latest_tr = tr[-1][1] if tr else None
     atr14 = average([value for _, value in tr[-14:]]) if len(tr) >= 14 else None
     tr_vs_atr = latest_tr / atr14 if latest_tr is not None and atr14 else None
     abs_returns = [abs(value) for _, value in returns_[-60:]]
     abs_return_percentile = percentile(abs_returns, abs(latest_return), 20) if latest_return is not None else None
-    ranges = []
-    for index, bar in enumerate(bars[-60:]):
-        previous_close = bars[max(0, len(bars) - len(bars[-60:]) + index - 1)].close if len(bars) > 1 else None
-        ranges.append((bar.high - bar.low) / previous_close if previous_close else 0)
+    range_pairs = daily_range_ratios(bars)[-60:]
+    ranges = [value for _, value in range_pairs]
     latest_range_ratio = ranges[-1] if ranges else None
     range_percentile = percentile(ranges, latest_range_ratio, 20) if latest_range_ratio is not None else None
     abs_high = abs_return_percentile is not None and abs_return_percentile >= 0.9
@@ -605,6 +713,7 @@ def volatility_section(bars: list[Bar], returns_: list[tuple[str, float]]) -> di
         "true_range_vs_atr14": rounded(tr_vs_atr),
         "latest_absolute_return_percentile_60d": rounded(abs_return_percentile),
         "latest_daily_range_percentile_60d": rounded(range_percentile),
+        "daily_range_percentile_observations": len(ranges),
         "abnormal_move": abnormal,
         "thresholds": {
             "absolute_return_unusually_high": "latest absolute return percentile >= 0.90 over available recent returns",
@@ -613,12 +722,26 @@ def volatility_section(bars: list[Bar], returns_: list[tuple[str, float]]) -> di
     }
 
 
-def gap_section(bars: list[Bar], candle: dict[str, Any]) -> dict[str, Any]:
+def gap_section(
+    bars: list[Bar],
+    candle: dict[str, Any],
+    warnings: WarningCollector | None = None,
+    use_verified_pre_close: bool = False,
+) -> dict[str, Any]:
     if len(bars) < 2:
         return {"type": "insufficient_data", "opening_gap_return": None, "fill_status": None}
     latest = bars[-1]
     previous = bars[-2]
-    reference_close = latest.pre_close or previous.close
+    reference_close, reference_source = previous_close_reference(
+        bars, len(bars) - 1, warnings, use_verified_pre_close
+    )
+    if reference_close is None:
+        return {
+            "type": "insufficient_data",
+            "opening_gap_return": None,
+            "fill_status": None,
+            "previous_close_source": reference_source,
+        }
     opening_gap_return = latest.open / reference_close - 1.0
     if latest.low > previous.high:
         gap_type = "full_upward_gap"
@@ -638,6 +761,7 @@ def gap_section(bars: list[Bar], candle: dict[str, Any]) -> dict[str, Any]:
     return {
         "type": gap_type,
         "opening_gap_return": rounded(opening_gap_return),
+        "previous_close_source": reference_source,
         "fill_status": fill_status,
         "gap_up_closed_weakly": opening_gap_return > 0 and candle.get("close_zone") == "near_low",
         "gap_down_recovered_strongly": opening_gap_return < 0 and candle.get("close_zone") == "near_high",
@@ -653,14 +777,49 @@ def aligned_period_return(bars: list[Bar], common_dates: list[str], days: int) -
     return by_date[end] / by_date[start] - 1.0
 
 
-def relative_strength_one(stock: list[Bar], other: list[Bar]) -> dict[str, Any]:
+def score_relative_strength(value: float | None) -> int | None:
+    if value is None:
+        return None
+    if value >= 0.05:
+        return 2
+    if value >= 0.02:
+        return 1
+    if value <= -0.05:
+        return -2
+    if value <= -0.02:
+        return -1
+    return 0
+
+
+def relative_strength_one(stock: list[Bar], other: list[Bar], quality: dict[str, Any]) -> dict[str, Any]:
     common = sorted(set(bar.date for bar in stock) & set(bar.date for bar in other))
-    result: dict[str, Any] = {"common_observations": len(common)}
+    result: dict[str, Any] = {
+        "common_observations": len(common),
+        "data_quality_status": quality.get("status"),
+        "price_data_status": quality.get("price_data_status"),
+        "volume_data_status": quality.get("volume_data_status"),
+        "warning_counts": quality.get("warning_counts", {}),
+        "warning_examples": quality.get("warning_examples", []),
+    }
     for days in (1, 5, 20):
         stock_ret = aligned_period_return(stock, common, days)
         other_ret = aligned_period_return(other, common, days)
         result[f"return_{days}d_difference"] = rounded(stock_ret - other_ret if stock_ret is not None and other_ret is not None else None)
     return result
+
+
+def unavailable_relative_strength(reason: str) -> dict[str, Any]:
+    return {
+        "common_observations": 0,
+        "data_quality_status": "unusable",
+        "price_data_status": "insufficient",
+        "volume_data_status": None,
+        "return_1d_difference": None,
+        "return_5d_difference": None,
+        "return_20d_difference": None,
+        "warning_counts": {"comparison_data_unusable": 1},
+        "warning_examples": [{"reason": "comparison_data_unusable", "detail": reason}],
+    }
 
 
 def relative_strength_section(
@@ -669,13 +828,38 @@ def relative_strength_section(
     sector: Path | None,
     adjustment: str,
 ) -> dict[str, Any]:
-    result = {"benchmark": None, "sector": None}
+    result: dict[str, Any] = {
+        "benchmark": None,
+        "sector": None,
+        "benchmark_relative_strength_score": None,
+        "sector_relative_strength_score": None,
+        "relative_strength_conflict": False,
+    }
     if benchmark is not None:
-        bars, _ = load_bars(benchmark, adjustment)
-        result["benchmark"] = relative_strength_one(stock, bars)
+        try:
+            bars, quality = load_bars(benchmark, adjustment)
+            result["benchmark"] = relative_strength_one(stock, bars, quality)
+            result["benchmark_relative_strength_score"] = score_relative_strength(
+                result["benchmark"].get("return_20d_difference")
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            result["benchmark"] = unavailable_relative_strength(f"{benchmark.name}: {type(exc).__name__}")
     if sector is not None:
-        bars, _ = load_bars(sector, adjustment)
-        result["sector"] = relative_strength_one(stock, bars)
+        try:
+            bars, quality = load_bars(sector, adjustment)
+            result["sector"] = relative_strength_one(stock, bars, quality)
+            result["sector_relative_strength_score"] = score_relative_strength(
+                result["sector"].get("return_20d_difference")
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            result["sector"] = unavailable_relative_strength(f"{sector.name}: {type(exc).__name__}")
+    benchmark_score = result.get("benchmark_relative_strength_score")
+    sector_score = result.get("sector_relative_strength_score")
+    result["relative_strength_conflict"] = (
+        benchmark_score is not None
+        and sector_score is not None
+        and benchmark_score * sector_score < 0
+    )
     return result
 
 
@@ -690,12 +874,45 @@ def score_from_trend(state: str) -> int | None:
     }.get(state)
 
 
+def price_volume_score(
+    range_structure: dict[str, Any],
+    candle: dict[str, Any],
+    volume: dict[str, Any],
+    latest_return: float | None,
+) -> tuple[int | None, list[str]]:
+    volume_state = volume.get("state")
+    range_state = range_structure.get("state")
+    close_zone = candle.get("close_zone")
+    if volume_state == "insufficient_data" or latest_return is None:
+        return None, ["price_volume:insufficient_volume_or_return_data"]
+    high_volume = volume_state == "high"
+    above_volume = volume_state in {"high", "above_average"}
+    low_volume = volume_state == "below_average"
+    if range_state == "close_breakdown" and above_volume:
+        return -2 if high_volume else -1, ["price_volume:breakdown_with_above_average_volume"]
+    if latest_return < 0 and close_zone == "near_low" and high_volume:
+        return -2, ["price_volume:high_volume_down_day"]
+    if range_state == "intraday_failed_breakout" and above_volume:
+        score = -2 if close_zone == "near_low" or high_volume else -1
+        return score, ["price_volume:failed_breakout_with_above_average_volume"]
+    if range_state == "close_breakout" and above_volume:
+        return 2 if high_volume else 1, ["price_volume:breakout_with_above_average_volume"]
+    if latest_return > 0 and close_zone == "near_high" and above_volume:
+        return 2 if high_volume else 1, ["price_volume:up_day_closing_near_high_with_volume"]
+    if latest_return < 0 and low_volume:
+        return 0, ["price_volume:low_volume_pullback"]
+    if latest_return > 0 and low_volume:
+        return 0, ["price_volume:low_volume_up_day"]
+    return 0, ["price_volume:neutral_price_volume_interaction"]
+
+
 def structural_summary(
     trend: dict[str, Any],
     range_structure: dict[str, Any],
     candle: dict[str, Any],
     volume: dict[str, Any],
     relative_strength: dict[str, Any],
+    latest_return: float | None,
 ) -> dict[str, Any]:
     trend_score = score_from_trend(str(trend.get("state")))
     range_state = range_structure.get("state")
@@ -716,32 +933,14 @@ def structural_summary(
     if price_score is not None and candle.get("close_zone") == "near_low":
         price_score = max(-2, price_score - 1)
 
-    volume_score = {
-        "high": 2,
-        "above_average": 1,
-        "normal": 0,
-        "below_average": -1,
-        "insufficient_data": None,
-    }.get(volume.get("state"))
-
-    rs20 = None
-    if relative_strength.get("benchmark") and relative_strength["benchmark"].get("return_20d_difference") is not None:
-        rs20 = relative_strength["benchmark"]["return_20d_difference"]
-    elif relative_strength.get("sector") and relative_strength["sector"].get("return_20d_difference") is not None:
-        rs20 = relative_strength["sector"]["return_20d_difference"]
-    if rs20 is None:
-        rs_score = None
-    elif rs20 >= 0.05:
-        rs_score = 2
-    elif rs20 >= 0.02:
-        rs_score = 1
-    elif rs20 <= -0.05:
-        rs_score = -2
-    elif rs20 <= -0.02:
-        rs_score = -1
-    else:
-        rs_score = 0
-    available = [score for score in (trend_score, price_score, volume_score, rs_score) if score is not None]
+    pv_score, pv_evidence = price_volume_score(range_structure, candle, volume, latest_return)
+    benchmark_rs_score = relative_strength.get("benchmark_relative_strength_score")
+    sector_rs_score = relative_strength.get("sector_relative_strength_score")
+    available = [
+        score
+        for score in (trend_score, price_score, pv_score, benchmark_rs_score, sector_rs_score)
+        if score is not None
+    ]
     if len(available) < 2:
         classification = "insufficient_data"
     else:
@@ -756,19 +955,44 @@ def structural_summary(
             classification = "slightly_weak"
         else:
             classification = "mixed"
+    evidence = [item for item in trend.get("evidence", []) if item]
+    if range_state:
+        evidence.append(f"range:{range_state}")
+    evidence.extend(pv_evidence)
+    if benchmark_rs_score is not None:
+        evidence.append(
+            "relative_strength:benchmark_outperformance"
+            if benchmark_rs_score > 0
+            else "relative_strength:benchmark_underperformance"
+            if benchmark_rs_score < 0
+            else "relative_strength:benchmark_neutral"
+        )
+    if sector_rs_score is not None:
+        evidence.append(
+            "relative_strength:sector_outperformance"
+            if sector_rs_score > 0
+            else "relative_strength:sector_underperformance"
+            if sector_rs_score < 0
+            else "relative_strength:sector_neutral"
+        )
+    if relative_strength.get("relative_strength_conflict"):
+        evidence.append("relative_strength:mixed_benchmark_sector")
     return {
         "trend_score": trend_score,
         "price_action_score": price_score,
-        "volume_score": volume_score,
-        "relative_strength_score": rs_score,
+        "price_volume_score": pv_score,
+        "benchmark_relative_strength_score": benchmark_rs_score,
+        "sector_relative_strength_score": sector_rs_score,
+        "relative_strength_conflict": relative_strength.get("relative_strength_conflict"),
         "classification": classification,
         "scoring_rules": {
             "trend_score": "strong_uptrend=2, uptrend=1, mixed=0, downtrend=-1, strong_downtrend=-2",
             "price_action_score": "range breakout/recovery/breakdown state adjusted one step by latest close zone",
-            "volume_score": "high=2, above_average=1, normal=0, below_average=-1",
-            "relative_strength_score": "20d relative return difference thresholds: +/-2% and +/-5%",
+            "price_volume_score": "price-volume interaction only; high-volume down days and failed breakouts are negative, low-volume pullbacks are neutral",
+            "benchmark_relative_strength_score": "20d stock return minus benchmark return: +/-2% and +/-5% thresholds",
+            "sector_relative_strength_score": "20d stock return minus sector return: +/-2% and +/-5% thresholds",
         },
-        "evidence": [*trend.get("evidence", []), str(range_state), str(volume.get("state"))],
+        "evidence": evidence,
     }
 
 
@@ -789,6 +1013,7 @@ def calculate_features(
     adjustment: str = "unknown",
     benchmark: Path | None = None,
     sector: Path | None = None,
+    pre_close_adjustment_verified: bool = False,
 ) -> dict[str, Any]:
     if adjustment not in ALLOWED_ADJUSTMENTS:
         raise ValueError(f"Unsupported adjustment: {adjustment}")
@@ -815,16 +1040,19 @@ def calculate_features(
         return result
 
     returns_ = daily_returns(bars)
+    runtime_warnings = WarningCollector({}, [])
     ma = moving_averages_section(bars)
     trend = trend_section(bars, ma, quality["status"])
-    candle = latest_candle_section(bars)
-    volume = volume_section(bars, returns_)
+    candle = latest_candle_section(bars, runtime_warnings, pre_close_adjustment_verified)
+    volume = volume_section(bars, returns_, quality["volume_data_status"])
     ranges = range_structure_section(bars)
     sequence = sequence_section(bars)
-    volatility = volatility_section(bars, returns_)
-    gap = gap_section(bars, candle)
+    volatility = volatility_section(bars, returns_, runtime_warnings, pre_close_adjustment_verified)
+    gap = gap_section(bars, candle, runtime_warnings, pre_close_adjustment_verified)
     relative_strength = relative_strength_section(bars, benchmark, sector, adjustment)
-    summary = structural_summary(trend, ranges, candle, volume, relative_strength)
+    latest_return = returns_[-1][1] if returns_ else None
+    summary = structural_summary(trend, ranges, candle, volume, relative_strength, latest_return)
+    merge_warning_summary(quality, runtime_warnings)
     result = {
         "schema_version": SCHEMA_VERSION,
         "as_of_date": bars[-1].date,
@@ -856,12 +1084,18 @@ def main() -> None:
     parser.add_argument("--benchmark", type=Path)
     parser.add_argument("--sector", type=Path)
     parser.add_argument("--adjustment", choices=sorted(ALLOWED_ADJUSTMENTS), default="unknown")
+    parser.add_argument(
+        "--pre-close-adjustment-verified",
+        action="store_true",
+        help="Allow pre_close to be used when metadata confirms it shares the same adjustment basis.",
+    )
     args = parser.parse_args()
     result = calculate_features(
         args.stock,
         adjustment=args.adjustment,
         benchmark=args.benchmark,
         sector=args.sector,
+        pre_close_adjustment_verified=args.pre_close_adjustment_verified,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

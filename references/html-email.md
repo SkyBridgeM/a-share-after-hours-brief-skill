@@ -34,9 +34,13 @@ Include these sections in order:
 - Follow A-share color convention for directional tags: `向上` / positive signals use red; `向下` / cautious signals use green; `维持震荡` and `证据不足` use neutral gray.
 - Let important event and condition-check sections breathe; do not compress away useful judgment.
 - Make the next-session assessment impossible to miss: use a clear status pill and a one-sentence explanation before detailed conditions.
+- For next-session cards, prefer the template classes `assessment-card`, `assessment-up`, `assessment-sideways`, `assessment-down`, and `assessment-insufficient`. Pair them with `tag-up`, `tag-sideways`, `tag-down`, or `tag-insufficient`.
+- Use `evidence-grid` for K-line versus information/news evidence. Use `signal-list` for compact K-line, news, upstream/downstream, relative-strength, and risk signals.
+- Use `condition-grid` for confirmation and invalidation conditions. Keep each condition in natural language and omit internal condition IDs.
 - Hide implementation details from user-facing output: condition IDs, raw JSON keys, Wind raw fields like `_DATE`, template variables, script names, and local absolute paths.
 - Translate internal enums before display (`mixed` -> `混合因素`, `stock_specific` -> `个股自身因素`, `sector` -> `行业/板块因素`, `market_beta` -> `市场因素`, `unknown` -> `暂无法归因`); show condition checks as natural-language conditions/evidence only.
-- For K-line feature output, show only a concise user-facing subset: trend state, close zone, volume state, range/breakout state, abnormal-move warning, relative strength, and 2-4 plain-language evidence points. Do not dump every metric or expose raw JSON keys.
+- For K-line feature output, show only a concise user-facing subset: trend state, close zone, volume state, price-volume interaction, range/breakout state, abnormal-move warning, benchmark/sector relative strength, and 2-4 plain-language evidence points. Do not dump every metric or expose raw JSON keys.
+- If volume quality is insufficient, show volume as not assessable rather than using volume expansion or contraction as a directional signal.
 
 ## Gmail Summary Rules
 
