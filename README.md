@@ -1,40 +1,38 @@
-# A Share After-Hours Brief Skill
+# A-share after-hours brief skill
 
 [中文说明](README_zh.md)
 
-A Codex / Agent Skills package for **after-hours A-share stock review**.
+This Codex / Agent Skills package reviews one or more A-share stocks after the market closes.
 
-This is not a stock-picking tool, a trading bot, or a full-market recap generator. It focuses on one or more user-specified A-share stocks, produces a mobile-friendly HTML review, and keeps portable local JSON history so the next run can verify the previous review.
+It does not pick stocks, trade, or write a full-market recap. It takes the stock or stock pool named by the user, creates a phone-friendly HTML brief, and saves local JSON history so the next run can check whether the previous observation points held up.
 
-## When To Use It
+## When to use it
 
-- Review one A-share stock after market close: what happened today and whether the logic changed.
-- Review a small stock pool: compare daily performance, events, and follow-up observation conditions.
-- Check the previous review: verify whether the last observation points were confirmed.
-- Generate an HTML brief that can be archived, shared, or attached to email.
+- Review one A-share stock after the close and see whether today's move changed the thesis.
+- Review a small stock pool by comparing price action, events, and follow-up conditions.
+- Check the last review and mark each observation point as verified, partly verified, not verified, invalidated, or unable to judge.
+- Create an HTML brief for archiving, sharing, or email attachment.
 - Review position discipline when the user provides holdings or transaction records.
 
-## Core Features
+## Core features
 
-- **Single-stock or stock-pool review**: supports one or multiple A-share stocks.
-- **Previous-review verification**: uses `verified / partially_verified / not_verified / invalidated / unable_to_judge`.
-- **Portable JSON history**: defaults to a `history/` folder next to the HTML output.
-- **Market and industry baselines**: used only as context to separate market, sector, and stock-specific factors.
-- **Major events and industry news**: handles announcements, earnings, meetings, policy changes, and industry updates.
-- **Correlation calculation**: computes Pearson correlation from two stocks' K-line returns.
-- **Mobile-friendly HTML template**: designed for phone reading and email attachments.
-- **Gmail draft template**: can create a concise email body with the HTML report attached.
-- **Position discipline review**: enabled only when the user provides holdings, trade records, or explicitly asks for it.
+- Reviews one stock or a small stock pool.
+- Verifies the previous review with `verified / partially_verified / not_verified / invalidated / unable_to_judge`.
+- Saves structured history as JSON in a `history/` folder next to the HTML output.
+- Uses market and industry baselines only for context, so the brief can separate market, sector, and stock-specific factors.
+- Handles announcements, earnings, meetings, policy changes, and industry news.
+- Computes Pearson correlation from two stocks' K-line returns.
+- Uses an HTML template made for phone reading and email attachments.
+- Can create a short Gmail draft body when the user asks for one.
+- Checks position discipline only when the user provides holdings, trade records, or asks for it directly.
 
-## What It Does Not Do
+## Scope limits
 
-- Does not provide default buy or sell recommendations.
-- Does not execute trades.
-- Does not predict 1-3 day price movements.
-- Does not generate a complete market-wide recap by default.
-- Does not create weekly reviews or long-term memory by default.
-- Does not upload or centrally store user history.
-- Does not include Wind, Gmail, or other API credentials.
+- It does not provide default buy or sell recommendations.
+- It does not execute trades.
+- It does not predict 1-3 day price moves.
+- It does not generate a full market-wide recap by default.
+- It does not create weekly reviews or long-term memory by default.
 
 ## Installation
 
@@ -78,7 +76,7 @@ Copy the folder into your Codex skills directory:
 cp -R a-share-after-hours-brief ~/.codex/skills/
 ```
 
-## Usage Examples
+## Usage examples
 
 ```text
 Review today's CATL after market close
@@ -96,7 +94,7 @@ Verify the previous review and list next-trading-day observation conditions
 Review this A-share watchlist and create a Gmail draft
 ```
 
-Chinese prompts are fully supported, for example:
+Chinese prompts work as well:
 
 ```text
 复盘今天的宁德时代
@@ -121,11 +119,11 @@ The generated HTML review usually includes:
 9. Next-trading-day observation points
 10. Optional position discipline review
 
-The "next-trading-day observation" section only lists verifiable variables and conditions. It does not provide a directional price forecast.
+The "next-trading-day observation" section lists only variables and conditions that can be checked later. It does not make a directional price forecast.
 
 ## JSON History
 
-History defaults to a folder next to the HTML output:
+By default, history is saved next to the HTML output:
 
 ```text
 reports/
@@ -134,15 +132,15 @@ reports/
     └── 2026-06-16__300750-SZ_600519-SH.json
 ```
 
-Design principles:
+History rules:
 
 - JSON is the only structured history source.
-- No Markdown history log is generated.
-- No absolute paths are stored.
-- The whole report directory can be moved or backed up.
-- Re-running the same stock pool on the same day updates the matching JSON record.
+- The skill does not generate a Markdown history log.
+- The JSON record does not store absolute paths.
+- The report directory can be moved or backed up as a folder.
+- Running the same stock pool again on the same day updates the matching JSON record.
 
-## Project Structure
+## Project structure
 
 ```text
 a-share-after-hours-brief/
@@ -180,7 +178,7 @@ python3 scripts/review_journal.py lookup \
   --stocks 300750.SZ,600519.SH
 ```
 
-Build and save the current history record:
+Build the current history record and save it:
 
 ```bash
 python3 scripts/review_journal.py build \
@@ -217,11 +215,11 @@ If you have the Skill Creator validator:
 python3 /path/to/skill-creator/scripts/quick_validate.py ./a-share-after-hours-brief
 ```
 
-## Data And Privacy
+## Data and privacy
 
-Do not commit generated HTML reports, `history/*.json`, holding records, or trade records. This repository only publishes reusable skill logic, templates, and documentation.
+Generated HTML reports, `history/*.json`, holding records, and trade records stay in the user's local output folder. The skill does not upload them or store them in a central service.
 
-`.gitignore` excludes common output folders and history data by default.
+This repository only includes reusable skill logic, templates, and documentation. It does not include Wind, Gmail, or other API credentials.
 
 ## Publishing
 
@@ -245,7 +243,7 @@ https://github.com/SkyBridgeM/a-share-after-hours-brief-skill
 
 ## Disclaimer
 
-This Skill is for research notes and workflow automation only. It is not investment advice, a trading instruction, or a promise of returns. Users are responsible for their own investment decisions.
+This skill is for research notes and workflow automation only. It is not investment advice, a trading instruction, or a promise of returns. Users are responsible for their own investment decisions.
 
 ## License
 
