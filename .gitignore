@@ -27,6 +27,7 @@ outputs/
 !assets/*.html
 !examples/**/*.json
 !examples/**/*.csv
+!schemas/**/*.json
 
 # Logs and temporary files
 *.log

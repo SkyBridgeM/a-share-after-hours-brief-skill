@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/SkyBridgeM/a-share-after-hours-brief-skill/schemas/history-v1.schema.json",
+  "title": "A-share after-hours brief history record",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "report_date",
+    "generated_at",
+    "stock_codes",
+    "market_context",
+    "stocks"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "report_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "ISO 8601 timestamp with timezone offset, preferably Asia/Shanghai for A-share reports."
+    },
+    "stock_codes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/stock_code"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "market_context": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "stocks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/stock_record"
+      }
+    },
+    "position_review": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "original_thesis": {
+              "type": "string"
+            },
+            "exit_conditions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "trigger_status": {
+              "type": "string"
+            },
+            "reported_execution": {
+              "type": "string"
+            },
+            "discipline_gap": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "stock_code": {
+      "type": "string",
+      "pattern": "^[0-9]{6}\\.(SH|SZ|BJ)$"
+    },
+    "condition": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "condition"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "previous_review": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "previous_date",
+        "status",
+        "evidence",
+        "adjustment"
+      ],
+      "properties": {
+        "previous_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "status": {
+          "enum": [
+            "已验证",
+            "部分验证",
+            "未验证",
+            "已失效",
+            "无法判断",
+            "无历史基线"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "adjustment": {
+          "type": "string"
+        }
+      }
+    },
+    "next_session_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assessment_status",
+        "tendency",
+        "confidence"
+      ],
+      "properties": {
+        "assessment_status": {
+          "enum": [
+            "assessable",
+            "insufficient_evidence"
+          ]
+        },
+        "tendency": {
+          "enum": [
+            "向上",
+            "维持震荡",
+            "向下",
+            null
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "偏高",
+            "中等",
+            "偏低"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "assessment_status": {
+                "const": "insufficient_evidence"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "tendency": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "assessment_status": {
+                "const": "assessable"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "tendency": {
+                "enum": [
+                  "向上",
+                  "维持震荡",
+                  "向下"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "next_session_watch": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "watch_items",
+        "confirmation_conditions",
+        "invalidation_conditions"
+      ],
+      "properties": {
+        "watch_items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "confirmation_conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition"
+          }
+        },
+        "invalidation_conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition"
+          }
+        }
+      }
+    },
+    "stock_record": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "code",
+        "name",
+        "attribution",
+        "previous_review",
+        "next_session_assessment",
+        "next_session_watch"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/stock_code"
+        },
+        "name": {
+          "type": "string"
+        },
+        "facts": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "attribution": {
+          "enum": [
+            "market_beta",
+            "sector",
+            "stock_specific",
+            "mixed",
+            "unknown"
+          ]
+        },
+        "thesis_change": {
+          "type": "string"
+        },
+        "previous_review": {
+          "$ref": "#/$defs/previous_review"
+        },
+        "next_session_assessment": {
+          "$ref": "#/$defs/next_session_assessment"
+        },
+        "next_session_watch": {
+          "$ref": "#/$defs/next_session_watch"
+        }
+      }
+    }
+  }
+}

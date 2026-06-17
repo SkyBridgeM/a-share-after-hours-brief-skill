@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "report_date": "2026-06-17",
+  "generated_at": "2026-06-17T16:30:00+08:00",
+  "stock_codes": [
+    "300750.SZ"
+  ],
+  "market_context": {
+    "provider": "Wind",
+    "benchmark": "创业板指",
+    "summary": "市场背景用于归因，不作为单独交易结论。"
+  },
+  "stocks": [
+    {
+      "code": "300750.SZ",
+      "name": "宁德时代",
+      "facts": {
+        "provider": "Wind",
+        "close_change": "+1.86%"
+      },
+      "attribution": "mixed",
+      "thesis_change": "未改变",
+      "previous_review": {
+        "previous_date": "2026-06-16",
+        "status": "部分验证",
+        "evidence": [
+          {
+            "id": "volume-recovery",
+            "kind": "confirmation_conditions",
+            "outcome": "met",
+            "evidence": "成交较上一交易日放大。"
+          }
+        ],
+        "adjustment": "继续观察量能和板块相对强弱。"
+      },
+      "next_session_assessment": {
+        "assessment_status": "assessable",
+        "tendency": "向上",
+        "confidence": "中等"
+      },
+      "next_session_watch": {
+        "watch_items": [
+          "板块指数是否同步走强",
+          "成交额是否维持在近期均值上方"
+        ],
+        "confirmation_conditions": [
+          {
+            "id": "volume-recovery",
+            "condition": "放量站稳短期压力位。"
+          }
+        ],
+        "invalidation_conditions": [
+          {
+            "id": "support-break",
+            "condition": "放量跌破今日低点。"
+          }
+        ]
+      }
+    }
+  ],
+  "position_review": null
+}

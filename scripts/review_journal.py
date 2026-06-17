@@ -8,7 +8,7 @@ import json
 import os
 import re
 import tempfile
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +22,9 @@ VALID_ATTRIBUTIONS = {
     "mixed",
     "unknown",
 }
+VALID_ASSESSMENT_STATUSES = {"assessable", "insufficient_evidence"}
+VALID_TENDENCIES = {"向上", "维持震荡", "向下"}
+VALID_CONFIDENCE = {"偏高", "中等", "偏低"}
 
 
 def parse_bool(value: str) -> bool:
@@ -40,6 +43,13 @@ def load_json(path: Path) -> dict[str, Any]:
     return data
 
 
+def relative_warning_path(path: Path, base: Path) -> str:
+    try:
+        return path.relative_to(base).as_posix()
+    except ValueError:
+        return path.name
+
+
 def normalize_code(code: str) -> str:
     value = str(code).strip().upper()
     if not re.fullmatch(r"\d{6}\.(SH|SZ|BJ)", value):
@@ -51,23 +61,52 @@ def parse_iso_date(value: str) -> date:
     return date.fromisoformat(value)
 
 
+def parse_iso_datetime_with_offset(value: str) -> datetime:
+    normalized = value.replace("Z", "+00:00")
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        raise ValueError("generated_at must include a timezone offset")
+    return parsed
+
+
 def history_filename(report_date: str, codes: list[str]) -> str:
     safe_codes = [code.replace(".", "-") for code in sorted(set(codes))]
     return f"{report_date}__{'_'.join(safe_codes)}.json"
 
 
-def iter_records(history_dir: Path) -> list[tuple[Path, dict[str, Any]]]:
+def load_history_records(
+    history_dir: Path,
+) -> tuple[list[tuple[Path, dict[str, Any]]], list[dict[str, str]]]:
     records: list[tuple[Path, dict[str, Any]]] = []
+    warnings: list[dict[str, str]] = []
     if not history_dir.exists():
-        return records
+        return records, warnings
     for path in sorted(history_dir.glob("*.json")):
         try:
             record = load_json(path)
             parse_iso_date(str(record["report_date"]))
             if isinstance(record.get("stocks"), list):
                 records.append((path, record))
-        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-            continue
+            else:
+                warnings.append({
+                    "file": relative_warning_path(path, history_dir),
+                    "reason": "stocks must be a list",
+                })
+        except json.JSONDecodeError:
+            warnings.append({
+                "file": relative_warning_path(path, history_dir),
+                "reason": "invalid JSON",
+            })
+        except (KeyError, TypeError, ValueError) as exc:
+            warnings.append({
+                "file": relative_warning_path(path, history_dir),
+                "reason": str(exc) or "incompatible history record",
+            })
+    return records, warnings
+
+
+def iter_records(history_dir: Path) -> list[tuple[Path, dict[str, Any]]]:
+    records, _ = load_history_records(history_dir)
     return records
 
 
@@ -86,12 +125,19 @@ def stock_map(record: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def lookup_previous(
     history_dir: Path, before_date: str, codes: list[str]
 ) -> dict[str, dict[str, Any] | None]:
+    return lookup_previous_with_meta(history_dir, before_date, codes)["results"]
+
+
+def lookup_previous_with_meta(
+    history_dir: Path, before_date: str, codes: list[str]
+) -> dict[str, Any]:
     cutoff = parse_iso_date(before_date)
     normalized = [normalize_code(code) for code in codes]
     candidates: dict[str, list[tuple[date, str, dict[str, Any]]]] = {
         code: [] for code in normalized
     }
-    for _, record in iter_records(history_dir):
+    records, warnings = load_history_records(history_dir)
+    for _, record in records:
         record_date = parse_iso_date(str(record["report_date"]))
         if record_date >= cutoff:
             continue
@@ -106,8 +152,12 @@ def lookup_previous(
                     "stock": stock,
                 }))
     return {
-        code: max(items, key=lambda item: (item[0], item[1]))[2] if items else None
-        for code, items in candidates.items()
+        "records_loaded": len(records),
+        "warnings": warnings,
+        "results": {
+            code: max(items, key=lambda item: (item[0], item[1]))[2] if items else None
+            for code, items in candidates.items()
+        },
     }
 
 
@@ -217,15 +267,58 @@ def validate_next_watch(stock: dict[str, Any]) -> None:
         raise ValueError(f"{stock['code']} watch_items must be a list")
 
 
+def validate_next_assessment(stock: dict[str, Any]) -> None:
+    assessment = stock.get("next_session_assessment")
+    if assessment is None:
+        stock["next_session_assessment"] = {
+            "assessment_status": "insufficient_evidence",
+            "tendency": None,
+            "confidence": "偏低",
+        }
+        return
+    if not isinstance(assessment, dict):
+        raise ValueError(f"{stock['code']} next_session_assessment must be an object")
+    status = assessment.get("assessment_status")
+    tendency = assessment.get("tendency")
+    confidence = assessment.get("confidence")
+    if status not in VALID_ASSESSMENT_STATUSES:
+        raise ValueError(f"{stock['code']} has invalid assessment_status")
+    if confidence not in VALID_CONFIDENCE:
+        raise ValueError(f"{stock['code']} has invalid confidence")
+    if status == "insufficient_evidence":
+        if tendency is not None:
+            raise ValueError(
+                f"{stock['code']} tendency must be null when evidence is insufficient"
+            )
+        return
+    if tendency not in VALID_TENDENCIES:
+        raise ValueError(f"{stock['code']} has invalid tendency")
+
+
+def assert_no_absolute_paths(value: Any, location: str = "record") -> None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            assert_no_absolute_paths(child, f"{location}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            assert_no_absolute_paths(child, f"{location}[{index}]")
+    elif isinstance(value, str):
+        if os.path.isabs(value) or re.match(r"^[A-Za-z]:[\\/]", value):
+            raise ValueError(f"{location} must not contain an absolute path")
+
+
 def build_record(
     draft: dict[str, Any],
     history_dir: Path,
     compare_previous: bool,
+    return_warnings: bool = False,
 ) -> dict[str, Any]:
     if int(draft.get("schema_version", SCHEMA_VERSION)) != SCHEMA_VERSION:
         raise ValueError(f"Unsupported schema_version: {draft.get('schema_version')}")
     report_date = str(draft.get("report_date", ""))
     parse_iso_date(report_date)
+    generated_at = str(draft.get("generated_at", ""))
+    parse_iso_datetime_with_offset(generated_at)
     stocks = draft.get("stocks")
     if not isinstance(stocks, list) or not stocks:
         raise ValueError("stocks must be a non-empty list")
@@ -241,13 +334,16 @@ def build_record(
         codes.append(code)
         if stock.get("attribution", "unknown") not in VALID_ATTRIBUTIONS:
             raise ValueError(f"{code} has invalid attribution")
+        validate_next_assessment(stock)
         validate_next_watch(stock)
 
-    previous = (
-        lookup_previous(history_dir, report_date, codes)
-        if compare_previous
-        else {code: None for code in codes}
-    )
+    history_warnings: list[dict[str, str]] = []
+    if compare_previous:
+        previous_meta = lookup_previous_with_meta(history_dir, report_date, codes)
+        previous = previous_meta["results"]
+        history_warnings = previous_meta["warnings"]
+    else:
+        previous = {code: None for code in codes}
     for stock in stocks:
         code = stock["code"]
         results = stock.pop("condition_results", [])
@@ -262,6 +358,12 @@ def build_record(
     draft["stock_codes"] = sorted(codes)
     draft.setdefault("market_context", {})
     draft.setdefault("position_review", None)
+    assert_no_absolute_paths(draft)
+    if return_warnings:
+        return {
+            "record": draft,
+            "warnings": history_warnings,
+        }
     return draft
 
 
@@ -291,21 +393,23 @@ def default_history_dir(output_html: Path) -> Path:
 
 def command_lookup(args: argparse.Namespace) -> None:
     codes = [item for item in args.stocks.split(",") if item.strip()]
-    result = lookup_previous(args.history_dir, args.before_date, codes)
+    result = lookup_previous_with_meta(args.history_dir, args.before_date, codes)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def command_build(args: argparse.Namespace) -> None:
     draft = load_json(args.input)
     history_dir = args.history_dir or default_history_dir(args.output_html)
-    record = build_record(draft, history_dir, args.compare_previous)
+    built = build_record(draft, history_dir, args.compare_previous, return_warnings=True)
+    record = built["record"]
     codes = [stock["code"] for stock in record["stocks"]]
     target = history_dir / history_filename(record["report_date"], codes)
     if args.history:
         atomic_write_json(target, record)
     print(json.dumps({
         "saved": args.history,
-        "history_file": str(target) if args.history else None,
+        "history_file": target.name if args.history else None,
+        "warnings": built["warnings"],
         "record": record,
     }, ensure_ascii=False, indent=2))
 
