@@ -22,7 +22,8 @@ It does not pick stocks, trade, or write a full-market recap. It takes the stock
 - Uses market, sector, and supply-chain context to separate market, industry, upstream/downstream, and stock-specific factors.
 - Handles announcements, earnings, meetings, policy changes, industry news, and upstream/downstream signals.
 - Separates assessability from direction. When evidence is sufficient, it assigns `向上 / 维持震荡 / 向下`; when evidence is insufficient, it records that explicitly instead of defaulting to sideways.
-- Calculates local K-line features from daily OHLCV data, including returns, moving averages, trend structure, candle location, volume state, range/breakout structure, volatility, gaps, and relative strength.
+- Calculates local K-line features from daily OHLCV data, including returns, moving averages, trend structure, candle location, volume state, range/breakout structure, volatility, gaps, and relative context.
+- Keeps absolute technical structure separate from benchmark and sector relative performance, so relative outperformance does not overwrite the stock's own price-volume structure.
 - Computes Pearson correlation from two stocks' K-line returns.
 - Uses a modern flat HTML template made for phone reading and email attachments. Direction tags follow the A-share color convention: red for up, green for down.
 - Can create a short Gmail draft body when the user asks for one. HTML attachment support is checked separately before claiming an attachment was added.
@@ -127,6 +128,8 @@ The generated HTML review usually includes:
 10. Optional position discipline review
 
 The next-session section first decides whether the available evidence is assessable. If it is, the report chooses one of `向上 / 维持震荡 / 向下` and shows the confidence level. If evidence is insufficient, the report says so and does not force a sideways judgment. It is not a trading instruction and does not include a target price.
+
+K-line output separates two layers: absolute technical structure and relative-performance context versus benchmark or sector. Data-quality limitations are shown by feature group, especially when volume data or comparison data is incomplete.
 
 ## JSON History
 

@@ -19,6 +19,9 @@ SCHEMA_VERSION = 1
 ANNUALIZATION_FACTOR = 252
 WARNING_EXAMPLE_LIMIT = 10
 PRE_CLOSE_CONFLICT_THRESHOLD = 0.001
+QUALITY_GOOD = "good"
+QUALITY_USABLE = "usable_with_limitations"
+QUALITY_INSUFFICIENT = "insufficient"
 ALLOWED_ADJUSTMENTS = {"forward", "backward", "none", "unknown"}
 DATE_KEYS = ("date", "trade_date", "datetime", "日期", "交易日期", "时间")
 OPEN_KEYS = ("open", "open_price", "开盘价", "开盘")
@@ -140,7 +143,7 @@ def load_bars(path: Path, adjustment: str = "unknown") -> tuple[list[Bar], dict[
     duplicate_dates: list[str] = []
     warnings = WarningCollector({}, [])
     missing_ohlc = {"open": 0, "high": 0, "low": 0, "close": 0}
-    missing_volume = 0
+    raw_rows_missing_volume = 0
     invalid_price_rows = 0
     rows_skipped = 0
     previous_seen_date: str | None = None
@@ -182,10 +185,10 @@ def load_bars(path: Path, adjustment: str = "unknown") -> tuple[list[Bar], dict[
 
         volume = parse_number(pick(row, VOLUME_KEYS), positive=False)
         if volume is None:
-            missing_volume += 1
+            raw_rows_missing_volume += 1
         elif volume < 0:
             volume = None
-            missing_volume += 1
+            raw_rows_missing_volume += 1
         amount = parse_number(pick(row, AMOUNT_KEYS), positive=False)
         pre_close = parse_number(pick(row, PRE_CLOSE_KEYS), positive=True)
         bar = Bar(row_date, open_, high, low, close, volume, amount, pre_close)
@@ -201,7 +204,7 @@ def load_bars(path: Path, adjustment: str = "unknown") -> tuple[list[Bar], dict[
         rows_skipped=rows_skipped,
         duplicate_dates=sorted(set(duplicate_dates)),
         missing_ohlc=missing_ohlc,
-        missing_volume=missing_volume,
+        raw_rows_missing_volume=raw_rows_missing_volume,
         invalid_price_rows=invalid_price_rows,
         chronological_corrections=chronological_corrections,
         adjustment=adjustment,
@@ -216,32 +219,35 @@ def data_quality(
     rows_skipped: int,
     duplicate_dates: list[str],
     missing_ohlc: dict[str, int],
-    missing_volume: int,
+    raw_rows_missing_volume: int,
     invalid_price_rows: int,
     chronological_corrections: int,
     adjustment: str,
     warnings: WarningCollector,
 ) -> dict[str, Any]:
     valid_rows = len(bars)
-    volume_coverage_ratio = (valid_rows - missing_volume) / valid_rows if valid_rows else 0.0
+    final_rows_with_volume = sum(1 for bar in bars if bar.volume is not None)
+    final_rows_missing_volume = valid_rows - final_rows_with_volume
+    volume_coverage_ratio = final_rows_with_volume / valid_rows if valid_rows else 0.0
+    volume_coverage_ratio = min(1.0, max(0.0, volume_coverage_ratio))
     if valid_rows < 5:
-        price_data_status = "insufficient"
+        price_data_status = QUALITY_INSUFFICIENT
     elif rows_skipped or valid_rows < 20:
-        price_data_status = "usable"
+        price_data_status = QUALITY_USABLE
     else:
-        price_data_status = "good"
+        price_data_status = QUALITY_GOOD
     if volume_coverage_ratio >= 0.95:
-        volume_data_status = "good"
+        volume_data_status = QUALITY_GOOD
     elif volume_coverage_ratio >= 0.50:
-        volume_data_status = "usable"
+        volume_data_status = QUALITY_USABLE
     else:
-        volume_data_status = "insufficient"
+        volume_data_status = QUALITY_INSUFFICIENT
     if valid_rows < 5:
-        status = "insufficient"
-    elif price_data_status != "good" or volume_data_status != "good":
-        status = "usable_with_limitations"
+        status = QUALITY_INSUFFICIENT
+    elif price_data_status != QUALITY_GOOD or volume_data_status != QUALITY_GOOD:
+        status = QUALITY_USABLE
     else:
-        status = "good"
+        status = QUALITY_GOOD
     result = {
         "status": status,
         "price_data_status": price_data_status,
@@ -252,7 +258,27 @@ def data_quality(
         "rows_skipped": rows_skipped,
         "duplicate_dates": duplicate_dates,
         "missing_ohlc_counts": missing_ohlc,
-        "missing_volume_count": missing_volume,
+        "missing_volume_count": final_rows_missing_volume,
+        "raw_rows_missing_volume": raw_rows_missing_volume,
+        "final_rows_missing_volume": final_rows_missing_volume,
+        "raw_input": {
+            "rows_read": rows_read,
+            "rows_skipped": rows_skipped,
+            "raw_rows_missing_volume": raw_rows_missing_volume,
+            "duplicate_date_count": len(duplicate_dates),
+            "duplicate_dates": duplicate_dates,
+            "missing_ohlc_counts": missing_ohlc,
+            "non_positive_or_invalid_price_rows": invalid_price_rows,
+            "chronological_corrections": chronological_corrections,
+        },
+        "final_series": {
+            "valid_rows": valid_rows,
+            "final_rows_with_volume": final_rows_with_volume,
+            "final_rows_missing_volume": final_rows_missing_volume,
+            "volume_coverage_ratio": rounded(volume_coverage_ratio),
+            "first_date": bars[0].date if bars else None,
+            "last_date": bars[-1].date if bars else None,
+        },
         "non_positive_or_invalid_price_rows": invalid_price_rows,
         "chronological_corrections": chronological_corrections,
         "adjustment_basis": adjustment,
@@ -483,12 +509,12 @@ def volume_section(bars: list[Bar], returns_: list[tuple[str, float]], volume_da
         "ratio_vs_prior_20d": None,
         "percentile_vs_prior_60d": None,
         "percentile_60d": None,
-        "percentile_60d_deprecated": "use percentile_vs_prior_60d; latest day is excluded from the comparison window",
+        "deprecated_fields": {"percentile_60d": "Use percentile_vs_prior_60d. Planned removal in 0.2.0."},
         "avg_volume_positive_return_days": None,
         "avg_volume_negative_return_days": None,
         "state": "insufficient_data",
     }
-    if volume_data_status == "insufficient" or not bars or bars[-1].volume is None:
+    if volume_data_status == QUALITY_INSUFFICIENT or not bars or bars[-1].volume is None:
         return {
             **insufficient,
             "limitation": "volume coverage is below 50% or latest volume is missing",
@@ -524,7 +550,7 @@ def volume_section(bars: list[Bar], returns_: list[tuple[str, float]], volume_da
         "ratio_vs_prior_20d": rounded(ratio20),
         "percentile_vs_prior_60d": rounded(volume_percentile),
         "percentile_60d": rounded(volume_percentile),
-        "percentile_60d_deprecated": "use percentile_vs_prior_60d; latest day is excluded from the comparison window",
+        "deprecated_fields": {"percentile_60d": "Use percentile_vs_prior_60d. Planned removal in 0.2.0."},
         "avg_volume_positive_return_days": rounded(avg_positive),
         "avg_volume_negative_return_days": rounded(avg_negative),
         "state": state,
@@ -777,6 +803,17 @@ def aligned_period_return(bars: list[Bar], common_dates: list[str], days: int) -
     return by_date[end] / by_date[start] - 1.0
 
 
+def quality_limitations(quality: dict[str, Any]) -> list[str]:
+    limitations: list[str] = []
+    if quality.get("status") == QUALITY_USABLE:
+        limitations.append("comparison data is usable with limitations")
+    if quality.get("price_data_status") == QUALITY_USABLE:
+        limitations.append("comparison price data is usable with limitations")
+    if quality.get("volume_data_status") == QUALITY_USABLE:
+        limitations.append("comparison volume data is usable with limitations")
+    return limitations
+
+
 def score_relative_strength(value: float | None) -> int | None:
     if value is None:
         return None
@@ -798,9 +835,15 @@ def relative_strength_one(stock: list[Bar], other: list[Bar], quality: dict[str,
         "data_quality_status": quality.get("status"),
         "price_data_status": quality.get("price_data_status"),
         "volume_data_status": quality.get("volume_data_status"),
+        "limitations": quality_limitations(quality),
         "warning_counts": quality.get("warning_counts", {}),
         "warning_examples": quality.get("warning_examples", []),
     }
+    if quality.get("price_data_status") == QUALITY_INSUFFICIENT:
+        result["limitations"].append("comparison price data is insufficient; relative returns are not calculated")
+        for days in (1, 5, 20):
+            result[f"return_{days}d_difference"] = None
+        return result
     for days in (1, 5, 20):
         stock_ret = aligned_period_return(stock, common, days)
         other_ret = aligned_period_return(other, common, days)
@@ -811,9 +854,10 @@ def relative_strength_one(stock: list[Bar], other: list[Bar], quality: dict[str,
 def unavailable_relative_strength(reason: str) -> dict[str, Any]:
     return {
         "common_observations": 0,
-        "data_quality_status": "unusable",
-        "price_data_status": "insufficient",
+        "data_quality_status": QUALITY_INSUFFICIENT,
+        "price_data_status": QUALITY_INSUFFICIENT,
         "volume_data_status": None,
+        "limitations": [reason],
         "return_1d_difference": None,
         "return_5d_difference": None,
         "return_20d_difference": None,
@@ -906,6 +950,57 @@ def price_volume_score(
     return 0, ["price_volume:neutral_price_volume_interaction"]
 
 
+def classify_technical(scores: list[int]) -> tuple[str, float | None]:
+    if len(scores) < 2:
+        return "insufficient_data", None
+    avg_score = sum(scores) / len(scores)
+    if avg_score >= 1.2:
+        return "constructive", avg_score
+    if avg_score >= 0.4:
+        return "slightly_constructive", avg_score
+    if avg_score <= -1.2:
+        return "weak", avg_score
+    if avg_score <= -0.4:
+        return "slightly_weak", avg_score
+    return "mixed", avg_score
+
+
+def classify_relative(scores: list[int | None], conflict: bool) -> tuple[str, float | None]:
+    available = [score for score in scores if score is not None]
+    if not available:
+        return "insufficient_data", None
+    if conflict:
+        return "mixed", sum(available) / len(available)
+    avg_score = sum(available) / len(available)
+    if avg_score >= 1.5:
+        return "outperforming", avg_score
+    if avg_score > 0:
+        return "slightly_outperforming", avg_score
+    if avg_score <= -1.5:
+        return "underperforming", avg_score
+    if avg_score < 0:
+        return "slightly_underperforming", avg_score
+    return "mixed", avg_score
+
+
+def overall_interpretation(technical: str, relative: str, conflict: bool) -> str:
+    if technical == "insufficient_data" and relative == "insufficient_data":
+        return "insufficient_technical_and_relative_data"
+    if technical == "insufficient_data":
+        return f"technical_structure_insufficient_relative_context_{relative}"
+    if relative == "insufficient_data":
+        return f"technical_structure_{technical}_relative_context_insufficient"
+    if conflict:
+        return f"technical_structure_{technical}_relative_signals_mixed"
+    return f"technical_structure_{technical}_relative_context_{relative}"
+
+
+def add_evidence(target: dict[str, list[str]], category: str, values: list[str] | tuple[str, ...]) -> None:
+    clean = [value for value in values if value and value != "None"]
+    if clean:
+        target.setdefault(category, []).extend(clean)
+
+
 def structural_summary(
     trend: dict[str, Any],
     range_structure: dict[str, Any],
@@ -936,31 +1031,20 @@ def structural_summary(
     pv_score, pv_evidence = price_volume_score(range_structure, candle, volume, latest_return)
     benchmark_rs_score = relative_strength.get("benchmark_relative_strength_score")
     sector_rs_score = relative_strength.get("sector_relative_strength_score")
-    available = [
-        score
-        for score in (trend_score, price_score, pv_score, benchmark_rs_score, sector_rs_score)
-        if score is not None
-    ]
-    if len(available) < 2:
-        classification = "insufficient_data"
-    else:
-        avg_score = sum(available) / len(available)
-        if avg_score >= 1.2:
-            classification = "constructive"
-        elif avg_score >= 0.4:
-            classification = "slightly_constructive"
-        elif avg_score <= -1.2:
-            classification = "weak"
-        elif avg_score <= -0.4:
-            classification = "slightly_weak"
-        else:
-            classification = "mixed"
-    evidence = [item for item in trend.get("evidence", []) if item]
+    technical_scores = [score for score in (trend_score, price_score, pv_score) if score is not None]
+    technical_classification, technical_average = classify_technical(technical_scores)
+    relative_conflict = bool(relative_strength.get("relative_strength_conflict"))
+    relative_classification, relative_average = classify_relative(
+        [benchmark_rs_score, sector_rs_score], relative_conflict
+    )
+    evidence: dict[str, list[str]] = {}
+    add_evidence(evidence, "trend", trend.get("evidence", []))
     if range_state:
-        evidence.append(f"range:{range_state}")
-    evidence.extend(pv_evidence)
+        add_evidence(evidence, "price_action", [f"range:{range_state}"])
+    add_evidence(evidence, "price_volume", pv_evidence)
+    relative_evidence: list[str] = []
     if benchmark_rs_score is not None:
-        evidence.append(
+        relative_evidence.append(
             "relative_strength:benchmark_outperformance"
             if benchmark_rs_score > 0
             else "relative_strength:benchmark_underperformance"
@@ -968,31 +1052,73 @@ def structural_summary(
             else "relative_strength:benchmark_neutral"
         )
     if sector_rs_score is not None:
-        evidence.append(
+        relative_evidence.append(
             "relative_strength:sector_outperformance"
             if sector_rs_score > 0
             else "relative_strength:sector_underperformance"
             if sector_rs_score < 0
             else "relative_strength:sector_neutral"
         )
-    if relative_strength.get("relative_strength_conflict"):
-        evidence.append("relative_strength:mixed_benchmark_sector")
+    if relative_conflict:
+        relative_evidence.append("relative_strength:mixed_benchmark_sector")
+    add_evidence(evidence, "relative_context", relative_evidence)
+    evidence_flat = [item for values in evidence.values() for item in values]
+    relative_sources = [
+        name
+        for name, score in (("benchmark", benchmark_rs_score), ("sector", sector_rs_score))
+        if score is not None
+    ]
+    technical_structure = {
+        "trend_score": trend_score,
+        "price_action_score": price_score,
+        "price_volume_score": pv_score,
+        "classification": technical_classification,
+        "average_score": rounded(technical_average),
+        "available_dimensions": len(technical_scores),
+        "classification_rule": "average of available trend, price_action, and price_volume scores; require at least two dimensions",
+    }
+    relative_context = {
+        "benchmark_relative_strength_score": benchmark_rs_score,
+        "sector_relative_strength_score": sector_rs_score,
+        "classification": relative_classification,
+        "average_score": rounded(relative_average),
+        "conflict": relative_conflict,
+        "sources": relative_sources,
+        "based_on_single_comparison": len(relative_sources) == 1,
+        "classification_rule": "relative scores use +/-2% and +/-5% 20d thresholds; one source may classify with a single-source flag; conflicts classify as mixed",
+    }
     return {
+        "technical_structure": technical_structure,
+        "relative_context": relative_context,
+        "overall_interpretation": overall_interpretation(
+            technical_classification, relative_classification, relative_conflict
+        ),
         "trend_score": trend_score,
         "price_action_score": price_score,
         "price_volume_score": pv_score,
         "benchmark_relative_strength_score": benchmark_rs_score,
         "sector_relative_strength_score": sector_rs_score,
-        "relative_strength_conflict": relative_strength.get("relative_strength_conflict"),
-        "classification": classification,
+        "relative_strength_conflict": relative_conflict,
+        "classification": technical_classification,
         "scoring_rules": {
             "trend_score": "strong_uptrend=2, uptrend=1, mixed=0, downtrend=-1, strong_downtrend=-2",
             "price_action_score": "range breakout/recovery/breakdown state adjusted one step by latest close zone",
             "price_volume_score": "price-volume interaction only; high-volume down days and failed breakouts are negative, low-volume pullbacks are neutral",
             "benchmark_relative_strength_score": "20d stock return minus benchmark return: +/-2% and +/-5% thresholds",
             "sector_relative_strength_score": "20d stock return minus sector return: +/-2% and +/-5% thresholds",
+            "technical_classification": "constructive >= 1.2, slightly_constructive >= 0.4, mixed between -0.4 and 0.4, slightly_weak <= -0.4, weak <= -1.2; at least two technical dimensions required",
+            "relative_classification": "outperforming >= 1.5, slightly_outperforming > 0, mixed = 0 or conflicting sources, slightly_underperforming < 0, underperforming <= -1.5",
         },
         "evidence": evidence,
+        "evidence_flat": evidence_flat,
+        "deprecated_fields": {
+            "classification": "Use technical_structure.classification.",
+            "trend_score": "Use technical_structure.trend_score.",
+            "price_action_score": "Use technical_structure.price_action_score.",
+            "price_volume_score": "Use technical_structure.price_volume_score.",
+            "benchmark_relative_strength_score": "Use relative_context.benchmark_relative_strength_score.",
+            "sector_relative_strength_score": "Use relative_context.sector_relative_strength_score.",
+        },
     }
 
 
@@ -1018,6 +1144,15 @@ def calculate_features(
     if adjustment not in ALLOWED_ADJUSTMENTS:
         raise ValueError(f"Unsupported adjustment: {adjustment}")
     bars, quality = load_bars(stock_path, adjustment)
+    pre_close_policy = {
+        "verified_for_full_series": pre_close_adjustment_verified,
+        "default_source": "verified_pre_close" if pre_close_adjustment_verified else "previous_bar_close",
+        "description": (
+            "pre_close may be used across the full series only because the caller asserted a consistent adjustment basis"
+            if pre_close_adjustment_verified
+            else "previous-bar close is preferred; pre_close is used only when no previous bar exists"
+        ),
+    }
     if not bars:
         result = {
             "schema_version": SCHEMA_VERSION,
@@ -1034,7 +1169,13 @@ def calculate_features(
             "volatility": {"abnormal_move": "insufficient_data"},
             "gap": {"type": "insufficient_data"},
             "relative_strength": {"benchmark": None, "sector": None},
-            "structural_summary": {"classification": "insufficient_data"},
+            "structural_summary": {
+                "technical_structure": {"classification": "insufficient_data"},
+                "relative_context": {"classification": "insufficient_data"},
+                "overall_interpretation": "insufficient_technical_and_relative_data",
+                "classification": "insufficient_data",
+            },
+            "pre_close_policy": pre_close_policy,
         }
         assert_no_absolute_paths(result)
         return result
@@ -1058,6 +1199,7 @@ def calculate_features(
         "as_of_date": bars[-1].date,
         "adjustment": adjustment,
         "data_quality": quality,
+        "pre_close_policy": pre_close_policy,
         "returns": returns_section(bars),
         "moving_averages": ma,
         "trend": trend,

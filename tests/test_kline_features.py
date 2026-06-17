@@ -57,7 +57,10 @@ class KLineFeatureTests(unittest.TestCase):
         self.assertAlmostEqual(result["returns"]["return_1d"], 1 / 163, places=6)
         self.assertAlmostEqual(result["moving_averages"]["ma5"], 162.0, places=6)
         self.assertEqual(result["trend"]["state"], "strong_uptrend")
-        self.assertIn(result["structural_summary"]["classification"], {"constructive", "slightly_constructive"})
+        self.assertIn(
+            result["structural_summary"]["technical_structure"]["classification"],
+            {"constructive", "slightly_constructive"},
+        )
 
     def test_json_object_wrappers_and_chinese_fields(self):
         rows = [
@@ -71,6 +74,7 @@ class KLineFeatureTests(unittest.TestCase):
         result = kline_features.calculate_features(path)
         self.assertEqual(result["data_quality"]["valid_rows"], 5)
         self.assertEqual(result["as_of_date"], "2026-01-05")
+        self.assertEqual(result["data_quality"]["price_data_status"], "usable_with_limitations")
 
     def test_csv_reversed_input_duplicate_dates_and_bad_rows(self):
         rows = [
@@ -106,6 +110,8 @@ class KLineFeatureTests(unittest.TestCase):
         self.assertEqual(result["data_quality"]["missing_volume_count"], 25)
         self.assertEqual(result["data_quality"]["volume_data_status"], "insufficient")
         self.assertEqual(result["data_quality"]["status"], "usable_with_limitations")
+        self.assertEqual(result["data_quality"]["raw_rows_missing_volume"], 25)
+        self.assertEqual(result["data_quality"]["final_rows_missing_volume"], 25)
 
     def test_sparse_volume_does_not_produce_good_quality_or_volume_signals(self):
         rows = make_rows(100)
@@ -118,7 +124,51 @@ class KLineFeatureTests(unittest.TestCase):
         self.assertLess(result["data_quality"]["volume_coverage_ratio"], 0.5)
         self.assertNotEqual(result["data_quality"]["status"], "good")
         self.assertEqual(result["volume"]["state"], "insufficient_data")
-        self.assertIsNone(result["structural_summary"]["price_volume_score"])
+        self.assertIsNone(result["structural_summary"]["technical_structure"]["price_volume_score"])
+
+    def test_duplicate_volume_coverage_uses_final_deduplicated_series(self):
+        tail = []
+        base = date(2026, 1, 2)
+        for index in range(4):
+            close = 11 + index
+            tail.append({
+                "date": (base + timedelta(days=index)).isoformat(),
+                "open": close - 0.5,
+                "high": close + 1,
+                "low": close - 1,
+                "close": close,
+                "volume": 100 + index,
+            })
+        rows = [
+            {"date": "2026-01-01", "open": 10, "high": 11, "low": 9, "close": 10},
+            {"date": "2026-01-01", "open": 10, "high": 11, "low": 9, "close": 10},
+            {"date": "2026-01-01", "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100},
+            *tail,
+        ]
+        result = kline_features.calculate_features(self.write_json("dup_kept_has_volume.json", rows))
+        self.assertEqual(result["data_quality"]["valid_rows"], 5)
+        self.assertEqual(result["data_quality"]["raw_rows_missing_volume"], 2)
+        self.assertEqual(result["data_quality"]["final_rows_missing_volume"], 0)
+        self.assertEqual(result["data_quality"]["missing_volume_count"], 0)
+        self.assertEqual(result["data_quality"]["volume_coverage_ratio"], 1.0)
+        self.assertEqual(result["data_quality"]["volume_data_status"], "good")
+        self.assertEqual(result["data_quality"]["duplicate_dates"], ["2026-01-01"])
+
+        rows[2].pop("volume")
+        result = kline_features.calculate_features(self.write_json("dup_kept_missing_volume.json", rows))
+        self.assertEqual(result["data_quality"]["final_rows_missing_volume"], 1)
+        self.assertEqual(result["data_quality"]["volume_coverage_ratio"], 0.8)
+        self.assertEqual(result["data_quality"]["volume_data_status"], "usable_with_limitations")
+
+    def test_volume_coverage_ratio_is_bounded_and_thresholds_are_inclusive(self):
+        for valid_count, expected_status in ((49, "insufficient"), (50, "usable_with_limitations"), (94, "usable_with_limitations"), (95, "good")):
+            rows = make_rows(100)
+            for row in rows[valid_count:]:
+                row.pop("volume")
+            result = kline_features.calculate_features(self.write_json(f"coverage_{valid_count}.json", rows))
+            self.assertGreaterEqual(result["data_quality"]["volume_coverage_ratio"], 0)
+            self.assertLessEqual(result["data_quality"]["volume_coverage_ratio"], 1)
+            self.assertEqual(result["data_quality"]["volume_data_status"], expected_status)
 
     def test_insufficient_data_behavior(self):
         path = self.write_json("short.json", make_rows(4))
@@ -157,22 +207,22 @@ class KLineFeatureTests(unittest.TestCase):
         high_volume_down = [dict(row) for row in rows]
         high_volume_down[-1].update({"open": 101, "high": 102, "low": 89, "close": 90, "volume": 400})
         result = kline_features.calculate_features(self.write_json("high_volume_down.json", high_volume_down))
-        self.assertLess(result["structural_summary"]["price_volume_score"], 0)
+        self.assertLess(result["structural_summary"]["technical_structure"]["price_volume_score"], 0)
 
         low_volume_pullback = [dict(row) for row in rows]
         low_volume_pullback[-1].update({"open": 101, "high": 102, "low": 98, "close": 99, "volume": 50})
         result = kline_features.calculate_features(self.write_json("low_volume_pullback.json", low_volume_pullback))
-        self.assertEqual(result["structural_summary"]["price_volume_score"], 0)
+        self.assertEqual(result["structural_summary"]["technical_structure"]["price_volume_score"], 0)
 
         breakout = [dict(row) for row in rows]
         breakout[-1].update({"open": 104, "high": 110, "low": 103, "close": 106, "volume": 400})
         result = kline_features.calculate_features(self.write_json("breakout_volume.json", breakout))
-        self.assertGreater(result["structural_summary"]["price_volume_score"], 0)
+        self.assertGreater(result["structural_summary"]["technical_structure"]["price_volume_score"], 0)
 
         failed = [dict(row) for row in rows]
         failed[-1].update({"open": 104, "high": 110, "low": 99, "close": 100, "volume": 400})
         result = kline_features.calculate_features(self.write_json("failed_volume.json", failed))
-        self.assertLess(result["structural_summary"]["price_volume_score"], 0)
+        self.assertLess(result["structural_summary"]["technical_structure"]["price_volume_score"], 0)
 
     def test_range_breakout_breakdown_and_failed_breakout(self):
         rows = make_rows(25, start=100, step=0)
@@ -217,6 +267,8 @@ class KLineFeatureTests(unittest.TestCase):
         rows = make_rows(10, start=100, step=0)
         rows[-1].update({"open": 100, "high": 101, "low": 99, "close": 100, "pre_close": 80})
         result = kline_features.calculate_features(self.write_json("preclose_conflict.json", rows))
+        self.assertFalse(result["pre_close_policy"]["verified_for_full_series"])
+        self.assertEqual(result["pre_close_policy"]["default_source"], "previous_bar_close")
         self.assertEqual(result["latest_candle"]["previous_close_source"], "previous_bar_close")
         self.assertEqual(result["gap"]["previous_close_source"], "previous_bar_close")
         self.assertIn("conflicting_pre_close_vs_previous_bar_close", result["data_quality"]["warning_counts"])
@@ -225,7 +277,26 @@ class KLineFeatureTests(unittest.TestCase):
             self.write_json("preclose_verified.json", rows),
             pre_close_adjustment_verified=True,
         )
+        self.assertTrue(verified["pre_close_policy"]["verified_for_full_series"])
+        self.assertEqual(verified["pre_close_policy"]["default_source"], "verified_pre_close")
         self.assertEqual(verified["latest_candle"]["previous_close_source"], "verified_pre_close")
+
+    def test_pre_close_first_row_missing_field_and_multiple_conflicts(self):
+        rows = make_rows(10, start=100, step=0)
+        rows[0].pop("volume")
+        rows[0]["pre_close"] = 99
+        rows[1]["pre_close"] = 80
+        rows[2]["pre_close"] = 120
+        result = kline_features.calculate_features(self.write_json("preclose_multiple.json", rows))
+        self.assertGreaterEqual(
+            result["data_quality"]["warning_counts"].get("conflicting_pre_close_vs_previous_bar_close", 0),
+            2,
+        )
+        self.assertEqual(result["latest_candle"]["previous_close_source"], "previous_bar_close")
+
+        no_pre_close = make_rows(10, start=100, step=0)
+        result = kline_features.calculate_features(self.write_json("no_preclose.json", no_pre_close))
+        self.assertEqual(result["latest_candle"]["previous_close_source"], "previous_bar_close")
 
     def test_upward_and_downward_gaps(self):
         rows = make_rows(10, start=100, step=0)
@@ -256,22 +327,48 @@ class KLineFeatureTests(unittest.TestCase):
             benchmark=self.write_json("rs_benchmark.json", benchmark),
             sector=self.write_json("rs_sector.json", sector),
         )
-        self.assertGreater(result["structural_summary"]["benchmark_relative_strength_score"], 0)
-        self.assertLess(result["structural_summary"]["sector_relative_strength_score"], 0)
+        self.assertGreater(result["structural_summary"]["relative_context"]["benchmark_relative_strength_score"], 0)
+        self.assertLess(result["structural_summary"]["relative_context"]["sector_relative_strength_score"], 0)
         self.assertTrue(result["relative_strength"]["relative_strength_conflict"])
+        self.assertEqual(result["structural_summary"]["relative_context"]["classification"], "mixed")
 
     def test_relative_strength_handles_single_side_and_bad_optional_file(self):
         stock = self.write_json("single_stock.json", make_rows(65, start=100, step=1))
         sector = self.write_json("single_sector.json", make_rows(65, start=100, step=0.1))
         sector_only = kline_features.calculate_features(stock, sector=sector)
-        self.assertIsNone(sector_only["structural_summary"]["benchmark_relative_strength_score"])
-        self.assertIsNotNone(sector_only["structural_summary"]["sector_relative_strength_score"])
+        self.assertIsNone(sector_only["structural_summary"]["relative_context"]["benchmark_relative_strength_score"])
+        self.assertIsNotNone(sector_only["structural_summary"]["relative_context"]["sector_relative_strength_score"])
+        self.assertTrue(sector_only["structural_summary"]["relative_context"]["based_on_single_comparison"])
 
         bad = self.root / "bad.json"
         bad.write_text("{not json", encoding="utf-8")
         bad_benchmark = kline_features.calculate_features(stock, benchmark=bad)
-        self.assertEqual(bad_benchmark["relative_strength"]["benchmark"]["data_quality_status"], "unusable")
-        self.assertIsNone(bad_benchmark["structural_summary"]["benchmark_relative_strength_score"])
+        self.assertEqual(bad_benchmark["relative_strength"]["benchmark"]["data_quality_status"], "insufficient")
+        self.assertIsNone(bad_benchmark["structural_summary"]["relative_context"]["benchmark_relative_strength_score"])
+
+    def test_relative_context_does_not_change_technical_classification(self):
+        weak_stock = make_rows(65, start=100, step=0)
+        for row in weak_stock[:-1]:
+            row.update({"open": 100, "high": 105, "low": 95, "close": 100, "volume": 100})
+        weak_stock[-1].update({"open": 99, "high": 101, "low": 88, "close": 90, "volume": 400})
+        weak = kline_features.calculate_features(
+            self.write_json("weak_abs.json", weak_stock),
+            benchmark=self.write_json("weak_benchmark.json", make_rows(65, start=100, step=-0.5)),
+        )
+        self.assertIn(weak["structural_summary"]["technical_structure"]["classification"], {"weak", "slightly_weak"})
+        self.assertIn(weak["structural_summary"]["relative_context"]["classification"], {"outperforming", "slightly_outperforming"})
+
+        strong_stock = make_rows(65, start=100, step=1)
+        weak_sector = make_rows(65, start=100, step=4)
+        strong = kline_features.calculate_features(
+            self.write_json("strong_abs.json", strong_stock),
+            sector=self.write_json("strong_sector.json", weak_sector),
+        )
+        self.assertIn(
+            strong["structural_summary"]["technical_structure"]["classification"],
+            {"constructive", "slightly_constructive"},
+        )
+        self.assertIn(strong["structural_summary"]["relative_context"]["classification"], {"underperforming", "slightly_underperforming"})
 
     def test_warning_examples_are_capped_and_evidence_is_namespaced(self):
         rows = [{"date": "bad", "open": "x", "high": 1, "low": 1, "close": 1} for _ in range(30)]
@@ -280,14 +377,56 @@ class KLineFeatureTests(unittest.TestCase):
         self.assertTrue(result["data_quality"]["warnings_truncated"])
         self.assertLessEqual(len(result["data_quality"]["warning_examples"]), 10)
         evidence = result["structural_summary"]["evidence"]
-        self.assertNotIn("None", evidence)
-        self.assertTrue(all(":" in item for item in evidence))
+        encoded = json.dumps(evidence)
+        self.assertNotIn("None", encoded)
+        for values in evidence.values():
+            self.assertTrue(all(":" in item for item in values))
 
     def test_missing_relative_strength_dimensions_remain_null(self):
         result = kline_features.calculate_features(self.write_json("no_rs.json", make_rows(65)))
-        self.assertIsNone(result["structural_summary"]["benchmark_relative_strength_score"])
-        self.assertIsNone(result["structural_summary"]["sector_relative_strength_score"])
+        self.assertIsNone(result["structural_summary"]["relative_context"]["benchmark_relative_strength_score"])
+        self.assertIsNone(result["structural_summary"]["relative_context"]["sector_relative_strength_score"])
+        self.assertEqual(result["structural_summary"]["relative_context"]["classification"], "insufficient_data")
         self.assertNotIn("relative_strength_score", result["structural_summary"])
+
+    def test_comparison_quality_gating_and_common_date_boundaries(self):
+        stock = self.write_json("cmp_stock.json", make_rows(65, start=100, step=1))
+        too_short = self.write_json("too_short_benchmark.json", make_rows(4, start=100, step=1))
+        short_result = kline_features.calculate_features(stock, benchmark=too_short)
+        self.assertEqual(short_result["relative_strength"]["benchmark"]["price_data_status"], "insufficient")
+        self.assertIsNone(short_result["relative_strength"]["benchmark"]["return_1d_difference"])
+        self.assertIsNone(short_result["structural_summary"]["relative_context"]["benchmark_relative_strength_score"])
+
+        malformed = [{"date": "bad", "open": "x", "high": 1, "low": 1, "close": 1} for _ in range(5)]
+        malformed.extend(make_rows(65, start=100, step=0.2))
+        usable_result = kline_features.calculate_features(stock, benchmark=self.write_json("usable_cmp.json", malformed))
+        self.assertEqual(usable_result["relative_strength"]["benchmark"]["price_data_status"], "usable_with_limitations")
+        self.assertIsNotNone(usable_result["relative_strength"]["benchmark"]["return_20d_difference"])
+        self.assertTrue(usable_result["relative_strength"]["benchmark"]["limitations"])
+
+        future = make_rows(25, start=100, step=0.2)
+        for row in future:
+            row["date"] = row["date"].replace("2026", "2027")
+        no_common = kline_features.calculate_features(stock, benchmark=self.write_json("no_common.json", future))
+        self.assertEqual(no_common["relative_strength"]["benchmark"]["common_observations"], 0)
+        self.assertIsNone(no_common["relative_strength"]["benchmark"]["return_1d_difference"])
+
+        exact = make_rows(21, start=100, step=0.2)
+        exact_result = kline_features.calculate_features(
+            self.write_json("exact_stock.json", make_rows(21, start=100, step=1)),
+            benchmark=self.write_json("exact_benchmark.json", exact),
+        )
+        self.assertIsNotNone(exact_result["relative_strength"]["benchmark"]["return_1d_difference"])
+        self.assertIsNotNone(exact_result["relative_strength"]["benchmark"]["return_5d_difference"])
+        self.assertIsNotNone(exact_result["relative_strength"]["benchmark"]["return_20d_difference"])
+
+        six = make_rows(6, start=100, step=0.2)
+        six_result = kline_features.calculate_features(
+            self.write_json("six_stock.json", make_rows(6, start=100, step=1)),
+            benchmark=self.write_json("six_benchmark.json", six),
+        )
+        self.assertIsNotNone(six_result["relative_strength"]["benchmark"]["return_5d_difference"])
+        self.assertIsNone(six_result["relative_strength"]["benchmark"]["return_20d_difference"])
 
     def test_output_has_no_prediction_or_recommendation_terms_and_no_paths(self):
         path = self.write_json("stock.json", make_rows(25))

@@ -42,11 +42,17 @@ Dates are normalized to `YYYY-MM-DD` from `YYYY-MM-DD`, `YYYYMMDD`, `YYYY/MM/DD`
 
 Data quality is reported separately for price and volume:
 
-- `price_data_status`: `good`, `usable`, or `insufficient`.
-- `volume_data_status`: `good` when volume coverage is at least 95%, `usable` from 50% to below 95%, and `insufficient` below 50%.
-- `volume_coverage_ratio`: valid volume observations divided by valid price observations.
+- `price_data_status`: `good`, `usable_with_limitations`, or `insufficient`.
+- `volume_data_status`: `good` when final-series volume coverage is at least 95%, `usable_with_limitations` from 50% to below 95%, and `insufficient` below 50%.
+- `volume_coverage_ratio`: final-series valid volume observations divided by final deduplicated price observations. The value is clamped to `[0, 1]`.
 
-The overall `data_quality.status` cannot be `good` when volume quality is not good. Price-only feature groups may still be usable when volume is incomplete, but volume-derived fields return null or `insufficient_data` when coverage is below 50%.
+The overall `data_quality.status` uses the same enum: `good`, `usable_with_limitations`, or `insufficient`. It cannot be `good` when volume quality is not good. Price-only feature groups may still be usable when volume is incomplete, but volume-derived fields return null or `insufficient_data` when coverage is below 50%.
+
+Diagnostics separate raw input from the final series:
+
+- `raw_input.rows_read`, `raw_input.rows_skipped`, and `raw_input.raw_rows_missing_volume` describe incoming rows before duplicate-date resolution.
+- `final_series.valid_rows`, `final_series.final_rows_missing_volume`, and `final_series.volume_coverage_ratio` describe the final deduplicated K-line series used for features.
+- Top-level compatibility fields such as `rows_read`, `valid_rows`, `missing_volume_count`, `raw_rows_missing_volume`, and `final_rows_missing_volume` remain available in 0.1.x. `missing_volume_count` means final-series missing volume rows.
 
 Warnings are aggregated as `warning_counts` and capped `warning_examples`; `warnings_truncated` marks omitted examples.
 
@@ -57,14 +63,14 @@ Warnings are aggregated as `warning_counts` and capped `warning_examples`; `warn
 - MA slope is the percentage change in the moving average over the last five available MA observations.
 - Close location is `(close - low) / (high - low)`. Zero-range candles return null ratios and `close_zone: "zero_range"`.
 - Volume ratios compare latest volume with prior 5-day and prior 20-day average volume, excluding the latest day.
-- `percentile_vs_prior_60d` compares the latest volume against the prior 60 valid volume observations and excludes the latest day. `percentile_60d` is retained as a deprecated compatibility alias.
+- `percentile_vs_prior_60d` compares the latest volume against the prior 60 valid volume observations and excludes the latest day. `percentile_60d` is retained as a deprecated compatibility alias for 0.1.x, with the deprecation note under `deprecated_fields`; planned removal is 0.2.0.
 - Historical volatility/range percentiles use the rank of the latest value within the available recent window and require at least 20 observations.
 - Prior range levels exclude the latest day.
 - True range is `max(high-low, abs(high-previous_close), abs(low-previous_close))`. The previous close source is the previous K-line bar by default; `pre_close` is used only when no previous bar exists or when `--pre-close-adjustment-verified` is supplied.
 - ATR14 is the average of the latest 14 true ranges.
 - 20-day volatility is the sample standard deviation of the latest 20 daily returns. Annualized volatility uses `sqrt(252)`.
 - Daily range percentile uses `(current_high - current_low) / previous_bar_close` for real previous-current pairs only. The first bar in a truncated window is not assigned a synthetic range ratio.
-- Relative strength uses aligned trading dates only. It reports stock return minus benchmark and stock return minus sector return separately for 1, 5, and 20 trading observations when available. Optional comparison data that cannot be parsed is marked unusable without failing the stock calculation.
+- Relative strength uses aligned trading dates only. It reports stock return minus benchmark and stock return minus sector return separately for 1, 5, and 20 trading observations when available. Optional comparison data that cannot be parsed is marked `insufficient` without failing the stock calculation. If comparison `price_data_status` is `insufficient`, relative-return differences and relative scores are null. If comparison data is `usable_with_limitations`, calculations may proceed when aligned observations are sufficient and limitations remain visible.
 
 ## Deterministic states
 
@@ -117,20 +123,47 @@ Abnormal move states:
 
 ## Structural summary
 
-The script reports component scores from -2 to +2:
+The script separates absolute technical structure from relative-performance context. Relative strength does not directly change the absolute technical classification.
+
+Technical structure uses only:
 
 - `trend_score`: strong uptrend 2, uptrend 1, mixed 0, downtrend -1, strong downtrend -2.
 - `price_action_score`: range breakout/recovery/breakdown state adjusted one step by the latest close zone.
 - `price_volume_score`: price-volume interaction score; raw volume level is not scored by itself.
+
+Technical classification averages the available technical scores and requires at least two available dimensions:
+
+- `constructive`: average >= 1.2.
+- `slightly_constructive`: average >= 0.4 and < 1.2.
+- `mixed`: average > -0.4 and < 0.4.
+- `slightly_weak`: average <= -0.4 and > -1.2.
+- `weak`: average <= -1.2.
+- `insufficient_data`: fewer than two technical dimensions.
+
+Relative context uses:
+
 - `benchmark_relative_strength_score`: 20-day stock return minus benchmark return, using +/-2% and +/-5% thresholds.
 - `sector_relative_strength_score`: 20-day stock return minus sector return, using +/-2% and +/-5% thresholds.
 
-Missing dimensions remain null rather than becoming neutral. Aggregate classifications are descriptive: `constructive`, `slightly_constructive`, `mixed`, `slightly_weak`, `weak`, or `insufficient_data`.
+Relative classification:
+
+- `outperforming`: average relative score >= 1.5.
+- `slightly_outperforming`: average relative score > 0 and < 1.5.
+- `mixed`: score is 0 or benchmark and sector scores conflict.
+- `slightly_underperforming`: average relative score < 0 and > -1.5.
+- `underperforming`: average relative score <= -1.5.
+- `insufficient_data`: no relative comparison score is available.
+
+If only one relative source is available, `based_on_single_comparison` is true. Sector-relative performance is more stock-specific than benchmark-relative performance, but neither source is silently discarded.
+
+Missing dimensions remain null rather than becoming neutral. `overall_interpretation` is a descriptive phrase combining the two layers; it is not a forecast.
 
 When benchmark and sector relative strength conflict, use `relative_strength_conflict: true` as mixed evidence. Sector relative strength is the better signal for stock-specific competitiveness; benchmark relative strength is market beta context. Do not collapse one into the other in the written report.
 
+Evidence is grouped by category under `structural_summary.evidence`: `trend`, `price_action`, `price_volume`, and `relative_context`. Raw evidence keys are for agent use; user-facing reports should translate them into natural Chinese.
+
 ## Report usage
 
-Use the script output as one evidence source in the final review. A constructive technical structure without information-side support should not automatically become a high-confidence upward assessment. A weak technical structure without an identified catalyst or event should not become a deterministic downward assessment.
+Use the script output as one evidence source in the final review. A constructive technical structure without information-side support should not automatically become a high-confidence upward assessment. A weak technical structure without an identified catalyst or event should not become a deterministic downward assessment. Outperforming a falling market does not automatically mean the stock has a constructive absolute structure; underperforming a strong sector does not automatically mean the stock is in an absolute downtrend.
 
-In polished HTML or Gmail summaries, show only a concise subset: trend state, close zone, volume state, range state, abnormal-move warning, relative strength, and 2-4 plain-language evidence points. Do not expose raw JSON keys or every calculated metric.
+In polished HTML or Gmail summaries, show only a concise subset: technical structure, close zone, volume state or volume-data limitation, range state, abnormal-move warning, benchmark/sector relative context, and 2-4 plain-language evidence points. Do not expose raw JSON keys, deprecated raw field names, or every calculated metric.

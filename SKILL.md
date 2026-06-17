@@ -39,7 +39,7 @@ Create a practical Chinese after-hours review for one or more specified A-share 
    - Fetch enough daily K-line context to support the next-session assessment for each stock. Prefer recent daily K-line data when price structure cannot be judged from compact snapshot fields alone.
    - When sufficient K-line rows are available, read `references/kline-analysis.md` and run `scripts/kline_features.py` instead of manually estimating moving averages, candle structure, volume ratios, breakouts, volatility, or relative strength.
    - Use K-line data for the correlation pair and calculate return correlation locally.
-   - Treat K-line data quality by dimension. If `price_data_status` is usable but `volume_data_status` is insufficient, price structure may still be discussed, but volume and price-volume conclusions must be marked insufficient.
+   - Treat K-line data quality by dimension. If `price_data_status` is `usable_with_limitations` but `volume_data_status` is `insufficient`, price structure may still be discussed, but volume and price-volume conclusions must be marked insufficient.
 
 3. **Previous review**
    - Read `references/history-and-review.md`.
@@ -71,12 +71,15 @@ Create a practical Chinese after-hours review for one or more specified A-share 
    - If evidence is insufficient, set `assessment_status: "insufficient_evidence"`, set `tendency: null`, and use `confidence: "偏低"`. Do not use `维持震荡` merely because data is missing.
    - Make the assessment visually and textually obvious in the report, ideally as a pill/tag near the stock name and again in the next-session section.
    - Base the tendency on two evidence groups:
-     - K-line/price-volume evidence: use `scripts/kline_features.py` output where available; summarize trend state, close zone, volume state, range state, abnormal-move warning, price-volume interaction, and benchmark/sector relative strength.
+     - K-line/price-volume evidence: use `scripts/kline_features.py` output where available; summarize absolute technical structure separately from benchmark/sector relative-performance context. Include trend state, close zone, volume state or limitation, range state, abnormal-move warning, and price-volume interaction.
      - Information/news evidence: announcements, earnings, guidance, policy/industry/supply-chain news, upstream cost/supply changes, downstream demand/order changes, company news, abnormal event, capital-market event, or absence of meaningful new information.
    - Treat K-line features as structured technical evidence, not a deterministic forecast. Do not infer missing K-line features.
    - If `data_quality.status` from `scripts/kline_features.py` is `insufficient`, the assessment should normally use `assessment_status: "insufficient_evidence"` and `tendency: null`.
    - If volume quality is insufficient, do not describe volume expansion, volume contraction, or price-volume confirmation as directional evidence. Say the volume side is not assessable.
-   - When benchmark and sector relative strength conflict, describe it as mixed evidence. Prefer sector relative strength for stock-specific competitiveness and benchmark relative strength for market beta context.
+   - When benchmark and sector relative strength conflict, describe it as mixed evidence. Prefer sector relative strength for stock-specific competitiveness and benchmark relative strength for market beta context, but do not silently discard either.
+   - Do not let relative performance override absolute technical structure. Outperforming a falling market is not automatically a constructive absolute structure; underperforming a strong sector is not automatically an absolute downtrend.
+   - No numerical K-line score directly determines `向上`, `维持震荡`, or `向下`. The final next-session assessment still requires information-side evidence.
+   - Material data-quality limitations should lower confidence or produce `insufficient_evidence` when the reliable feature groups are too narrow.
    - A constructive technical structure without information-side support should not automatically become a high-confidence `向上` judgment. A weak technical structure without an identified catalyst or event should not become a deterministic `向下` judgment.
    - Use `维持震荡` when evidence is assessable but mixed, weak, or lacks a clear catalyst. Do not force `向上` or `向下` from a single noisy indicator.
    - Include a short confidence label: `偏高`, `中等`, or `偏低`.
