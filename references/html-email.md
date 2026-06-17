@@ -36,6 +36,7 @@ Include these sections in order:
 - Make the next-session assessment impossible to miss: use a clear status pill and a one-sentence explanation before detailed conditions.
 - Hide implementation details from user-facing output: condition IDs, raw JSON keys, Wind raw fields like `_DATE`, template variables, script names, and local absolute paths.
 - Translate internal enums before display (`mixed` -> `混合因素`, `stock_specific` -> `个股自身因素`, `sector` -> `行业/板块因素`, `market_beta` -> `市场因素`, `unknown` -> `暂无法归因`); show condition checks as natural-language conditions/evidence only.
+- For K-line feature output, show only a concise user-facing subset: trend state, close zone, volume state, range/breakout state, abnormal-move warning, relative strength, and 2-4 plain-language evidence points. Do not dump every metric or expose raw JSON keys.
 
 ## Gmail Summary Rules
 

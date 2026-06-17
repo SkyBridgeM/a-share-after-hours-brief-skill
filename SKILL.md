@@ -36,7 +36,8 @@ Create a practical Chinese after-hours review for one or more specified A-share 
    - Read `references/data-providers.md` before selecting a provider. Label the provider used for price/K-line, announcements, financial facts, benchmark context, and news.
    - Read `references/wind-data.md` before selecting Wind fields or calling Wind CLI.
    - Fetch a compact broad-market benchmark and a relevant sector/style benchmark. Market data is context for the specified stocks, not a full-market review.
-   - Fetch enough K-line context to support the next-session directional tendency for each stock. Prefer recent daily K-line data when price structure cannot be judged from compact snapshot fields alone.
+   - Fetch enough daily K-line context to support the next-session assessment for each stock. Prefer recent daily K-line data when price structure cannot be judged from compact snapshot fields alone.
+   - When sufficient K-line rows are available, read `references/kline-analysis.md` and run `scripts/kline_features.py` instead of manually estimating moving averages, candle structure, volume ratios, breakouts, volatility, or relative strength.
    - Use K-line data for the correlation pair and calculate return correlation locally.
 
 3. **Previous review**
@@ -69,8 +70,11 @@ Create a practical Chinese after-hours review for one or more specified A-share 
    - If evidence is insufficient, set `assessment_status: "insufficient_evidence"`, set `tendency: null`, and use `confidence: "偏低"`. Do not use `维持震荡` merely because data is missing.
    - Make the assessment visually and textually obvious in the report, ideally as a pill/tag near the stock name and again in the next-session section.
    - Base the tendency on two evidence groups:
-     - K-line/price-volume evidence: close position, intraday recovery or failed rebound, volume/turnover, 5/10/20-day trend, recent high/low, support/resistance, gap, long upper/lower shadow, relative strength vs market/sector when available.
+     - K-line/price-volume evidence: use `scripts/kline_features.py` output where available; summarize trend state, close zone, volume state, range state, abnormal-move warning, and relative strength.
      - Information/news evidence: announcements, earnings, guidance, policy/industry/supply-chain news, upstream cost/supply changes, downstream demand/order changes, company news, abnormal event, capital-market event, or absence of meaningful new information.
+   - Treat K-line features as structured technical evidence, not a deterministic forecast. Do not infer missing K-line features.
+   - If `data_quality.status` from `scripts/kline_features.py` is `insufficient`, the assessment should normally use `assessment_status: "insufficient_evidence"` and `tendency: null`.
+   - A constructive technical structure without information-side support should not automatically become a high-confidence `向上` judgment. A weak technical structure without an identified catalyst or event should not become a deterministic `向下` judgment.
    - Use `维持震荡` when evidence is assessable but mixed, weak, or lacks a clear catalyst. Do not force `向上` or `向下` from a single noisy indicator.
    - Include a short confidence label: `偏高`, `中等`, or `偏低`.
    - Give 2-4 observable conditions for the next session: what would confirm the tendency, what would invalidate it, and what price/volume/news signal matters most.
@@ -97,6 +101,7 @@ Before delivery, check:
 - If Tier 3 returned data, it appears in the stock analysis, next-session conditions, or risk caveat.
 - Major-event skill use, if any, matches `references/event-triggers.md`.
 - Correlation uses returns, not raw prices, and reports sample size.
+- K-line feature output, when used, comes from `scripts/kline_features.py`; user-facing text summarizes only a concise subset and does not expose raw JSON keys.
 - Previous-review conditions use current facts and valid IDs from the prior record.
 - Industry/news analysis distinguishes upstream, own segment, downstream, and peer/substitute signals when those signals are material and available.
 - History JSON conforms to schema version 1, stores `generated_at` with timezone offset, and contains no absolute paths, exact target prices, or deterministic prediction language.

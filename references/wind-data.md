@@ -14,7 +14,7 @@ Use:
 
 - `financial_docs.get_company_announcements` for announcements/reports/disclosures.
 - `financial_docs.get_financial_news` for news and market reports.
-- `stock_data.get_stock_kline` for A-share daily K-line.
+- `stock_data.get_stock_kline` for A-share daily K-line. Save or structure the rows so `scripts/kline_features.py` can calculate local features.
 - `index_data.get_index_price_indicators` or `index_data.get_index_kline` for broad/sector index context.
 
 ## Next-Session Assessment Evidence
@@ -49,7 +49,7 @@ Use for ordinary daily reports and multi-stock pools.
 
 - Per stock: one compact price snapshot call.
 - Per stock: concise date-scoped announcement/news check.
-- Per stock: if compact fields are not enough to support the next-session assessment, add recent daily K-line data rather than guessing.
+- Per stock: if compact fields are not enough to support the next-session assessment, add recent daily K-line data and run `scripts/kline_features.py` rather than guessing.
 - For the report: K-line only for the specified correlation pair.
 - Broad market index snapshot only when needed for overall context.
 
@@ -57,9 +57,9 @@ Use for ordinary daily reports and multi-stock pools.
 
 Use when previous-review conditions or next-session watch items require time-series confirmation.
 
-- Add `stock_data.get_stock_kline` for stocks needing K-line confirmation or a stronger next-session tendency, usually near 60 trading days ending at report date.
-- Add one broad benchmark snapshot and one relevant style/sector benchmark when available.
-- Prefer local calculations from K-line: 5/20/60-day trend, recent high/low, support/resistance, consecutive rise/fall, and return correlation.
+- Add `stock_data.get_stock_kline` for stocks needing K-line confirmation or a stronger next-session assessment, usually near 60 trading days ending at report date.
+- Add one broad benchmark K-line and one relevant style/sector benchmark K-line when relative strength matters and data is available.
+- Prefer local calculations from `scripts/kline_features.py`: returns, moving averages, trend state, close location, volume ratios, range structure, consecutive states, volatility, gap state, and relative strength.
 
 ### Tier 3: Triggered enrichment
 
@@ -73,9 +73,26 @@ Triggers include: daily move around 5%+, unusually high turnover/volume ratio, s
 
 If Tier 3 is triggered and data is successfully fetched, include those indicators as explicit evidence in the stock analysis, condition check, or risk caveat. Do not leave fetched Tier 3 data unused.
 
-## K-Line and Correlation
+## K-Line Features and Correlation
 
 K-line params: `windcode` one stock only, `begin_date`/`end_date` as `yyyyMMdd`, `period: "10"` for daily K, `aftime: "0"` for forward-adjusted data when possible.
+
+For one-stock K-line structure, use:
+
+```bash
+python3 scripts/kline_features.py stock.json --adjustment forward
+```
+
+With benchmark and sector files:
+
+```bash
+python3 scripts/kline_features.py stock.json \
+  --benchmark benchmark.json \
+  --sector sector.json \
+  --adjustment forward
+```
+
+See `references/kline-analysis.md` for formulas, thresholds, and report-use rules.
 
 For two-stock correlation, call K-line separately for each stock, align common trading dates, convert close prices to daily returns, and calculate Pearson correlation locally. If common return observations are fewer than 30, report sample insufficiency.
 

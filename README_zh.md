@@ -20,6 +20,7 @@
 - 引入市场、行业和产业链背景作对照，用来区分市场、行业、上下游和个股因素。
 - 按触发规则处理公告、业绩、会议、政策、行业和上下游新闻。
 - 将"能否判断"和"方向倾向"分开处理。证据充分时输出 `向上 / 维持震荡 / 向下`；证据不足时明确标注，不把缺数据硬写成震荡。
+- 基于日 K 的本地特征计算，覆盖收益率、均线、趋势结构、收盘位置、量能状态、区间突破、波动、缺口和相对强弱。
 - 基于两只股票的 K 线收益率计算 Pearson 相关性。
 - 使用适合手机阅读和邮件附件的现代扁平风 HTML 模板，A 股方向标签遵循红涨绿跌。
 - 用户需要时，可以生成简短 Gmail 草稿正文。HTML 附件是否已添加，需要以 Gmail 工具返回结果为准。
@@ -30,6 +31,7 @@
 - 不默认给出买入或卖出建议
 - 不执行交易
 - 不给确定性价格预测或目标价
+- K 线特征只是复盘证据，不是独立预测或交易信号
 - 不做完整全市场复盘
 - 不默认生成周报或长期记忆
 
@@ -154,15 +156,32 @@ reports/
 │   ├── history-and-review.md
 │   ├── html-email.md
 │   ├── industry-news.md
+│   ├── kline-analysis.md
 │   └── wind-data.md
 ├── schemas/
 │   └── history-v1.schema.json
 └── scripts/
     ├── correlation.py
+    ├── kline_features.py
     └── review_journal.py
 ```
 
 ## 脚本说明
+
+计算本地 K 线结构特征：
+
+```bash
+python3 scripts/kline_features.py stock.json
+```
+
+带基准和行业相对强弱的 K 线特征：
+
+```bash
+python3 scripts/kline_features.py stock.json \
+  --benchmark benchmark.json \
+  --sector sector.json \
+  --adjustment forward
+```
 
 计算两只股票收益率相关性：
 
@@ -208,7 +227,7 @@ npm run check
 
 ```bash
 PYTHONPYCACHEPREFIX=/tmp/a-share-after-hours-brief-skill-pycache \
-python3 -m py_compile scripts/review_journal.py scripts/correlation.py
+python3 -m py_compile scripts/review_journal.py scripts/correlation.py scripts/kline_features.py
 ```
 
 完整 `npm run check` 还会运行 Python 单元测试和 Node.js 安装器测试，测试依赖只使用标准库和 Node.js 内置模块。

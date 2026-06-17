@@ -22,6 +22,7 @@ It does not pick stocks, trade, or write a full-market recap. It takes the stock
 - Uses market, sector, and supply-chain context to separate market, industry, upstream/downstream, and stock-specific factors.
 - Handles announcements, earnings, meetings, policy changes, industry news, and upstream/downstream signals.
 - Separates assessability from direction. When evidence is sufficient, it assigns `向上 / 维持震荡 / 向下`; when evidence is insufficient, it records that explicitly instead of defaulting to sideways.
+- Calculates local K-line features from daily OHLCV data, including returns, moving averages, trend structure, candle location, volume state, range/breakout structure, volatility, gaps, and relative strength.
 - Computes Pearson correlation from two stocks' K-line returns.
 - Uses a modern flat HTML template made for phone reading and email attachments. Direction tags follow the A-share color convention: red for up, green for down.
 - Can create a short Gmail draft body when the user asks for one. HTML attachment support is checked separately before claiming an attachment was added.
@@ -32,6 +33,7 @@ It does not pick stocks, trade, or write a full-market recap. It takes the stock
 - It does not provide default buy or sell recommendations.
 - It does not execute trades.
 - It does not provide deterministic price forecasts or target prices.
+- Local K-line features are evidence for the review, not a standalone forecast or trading signal.
 - It does not generate a full market-wide recap by default.
 - It does not create weekly reviews or long-term memory by default.
 
@@ -166,15 +168,32 @@ History rules:
 │   ├── history-and-review.md
 │   ├── html-email.md
 │   ├── industry-news.md
+│   ├── kline-analysis.md
 │   └── wind-data.md
 ├── schemas/
 │   └── history-v1.schema.json
 └── scripts/
     ├── correlation.py
+    ├── kline_features.py
     └── review_journal.py
 ```
 
 ## Scripts
+
+Calculate local K-line structure features:
+
+```bash
+python3 scripts/kline_features.py stock.json
+```
+
+Calculate K-line features with benchmark and sector relative strength:
+
+```bash
+python3 scripts/kline_features.py stock.json \
+  --benchmark benchmark.json \
+  --sector sector.json \
+  --adjustment forward
+```
 
 Calculate return correlation for two stocks:
 
@@ -220,7 +239,7 @@ You can also check the Python scripts directly:
 
 ```bash
 PYTHONPYCACHEPREFIX=/tmp/a-share-after-hours-brief-skill-pycache \
-python3 -m py_compile scripts/review_journal.py scripts/correlation.py
+python3 -m py_compile scripts/review_journal.py scripts/correlation.py scripts/kline_features.py
 ```
 
 The full check also runs Python unit tests and Node.js installer tests using only standard-library and built-in runtime features.
