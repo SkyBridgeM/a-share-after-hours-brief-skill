@@ -5,7 +5,7 @@ description: Generate one-stock or multi-stock A-share after-hours review briefs
 
 # A 股个股盘后复盘
 
-Create a practical Chinese after-hours review for one or more specified A-share stocks: what changed today, whether the thesis changed, how the previous judgment held up, and what observable conditions matter next session. This is not a full-market debrief. Default output is a polished mobile-friendly `.html` attachment; Gmail delivery uses a short plain summary body plus the HTML attachment.
+Create a practical Chinese after-hours review for one or more specified A-share stocks: what changed today, whether the thesis changed, how the previous judgment held up, and the next-session directional tendency. This is not a full-market debrief. Default output is a polished mobile-friendly `.html` attachment; Gmail delivery uses a short plain summary body plus the HTML attachment.
 
 ## Defaults
 
@@ -33,6 +33,7 @@ Create a practical Chinese after-hours review for one or more specified A-share 
    - Use request tiers to protect quota. Start with Tier 1 and escalate only when triggered.
    - Read `references/wind-data.md` before selecting Wind fields or calling Wind CLI.
    - Fetch a compact broad-market benchmark and a relevant sector/style benchmark. Market data is context for the specified stocks, not a full-market review.
+   - Fetch enough K-line context to support the next-session directional tendency for each stock. Prefer recent daily K-line data when price structure cannot be judged from compact snapshot fields alone.
    - Use K-line data for the correlation pair and calculate return correlation locally.
 
 3. **Previous review**
@@ -42,7 +43,9 @@ Create a practical Chinese after-hours review for one or more specified A-share 
    - Use `scripts/review_journal.py build` to calculate the final review status and atomically save the current JSON record.
 
 4. **Industry news**
-   - Use web/current news only as supplemental context when industry news may affect the brief.
+   - Use web/current news only as supplemental context when industry or supply-chain news may affect the brief.
+   - For each stock, identify the company's value-chain position before selecting news: upstream inputs/supply, the company's own segment, downstream demand/customers/channels, and close peers/substitutes.
+   - Prioritize news that changes costs, supply, prices, orders, demand, policy constraints, or customer/peer expectations. Avoid broad industry news that cannot be tied to the specified stock's value chain.
    - Cite links for material external news.
    - Read `references/industry-news.md` when using external industry news.
 
@@ -56,9 +59,16 @@ Create a practical Chinese after-hours review for one or more specified A-share 
    - Use `scripts/correlation.py` when K-line data is saved as JSON/CSV.
    - If common return observations are fewer than 30, report sample insufficiency and avoid a directional conclusion.
 
-7. **Next-session watch**
-   - For each stock, write observable watch items, confirmation conditions, and invalidation conditions.
-   - Do not predict direction or exact prices. Conditions may reference price/volume behavior, relative strength, disclosures, or sector confirmation when supported by available facts.
+7. **Next-session directional tendency**
+   - For each stock, assign exactly one next-session tendency: `向上`, `维持震荡`, or `向下`.
+   - Make the tendency visually and textually obvious in the report, ideally as a pill/tag near the stock name and again in the next-session section.
+   - Base the tendency on two evidence groups:
+     - K-line/price-volume evidence: close position, intraday recovery or failed rebound, volume/turnover, 5/10/20-day trend, recent high/low, support/resistance, gap, long upper/lower shadow, relative strength vs market/sector when available.
+     - Information/news evidence: announcements, earnings, guidance, policy/industry/supply-chain news, upstream cost/supply changes, downstream demand/order changes, company news, abnormal event, capital-market event, or absence of meaningful new information.
+   - Use `维持震荡` when evidence is mixed, weak, or lacks a clear catalyst. Do not force `向上` or `向下` from a single noisy indicator.
+   - Include a short confidence label: `偏高`, `中等`, or `偏低`.
+   - Give 2-4 observable conditions for the next session: what would confirm the tendency, what would invalidate it, and what price/volume/news signal matters most.
+   - Do not give exact target prices or treat the tendency as certainty. Phrase it as a conditional judgment based on current K-line and news evidence.
 
 8. **Optional position review**
    - When triggered, compare the user's original thesis and exit conditions with current facts.
@@ -80,7 +90,9 @@ Before delivery, check:
 - Major-event skill use, if any, matches `references/event-triggers.md`.
 - Correlation uses returns, not raw prices, and reports sample size.
 - Previous-review conditions use current facts and valid IDs from the prior record.
-- History JSON contains no absolute paths or directional outlook fields.
+- Industry/news analysis distinguishes upstream, own segment, downstream, and peer/substitute signals when those signals are material and available.
+- History JSON contains no absolute paths, exact target prices, or deterministic prediction language.
+- Each stock has exactly one visible next-session tendency from `向上` / `维持震荡` / `向下`, with K-line evidence, information/news evidence, confidence, confirmation conditions, and invalidation conditions.
 - User-facing HTML/Gmail does not expose internal condition IDs, raw provider field names, raw JSON keys, template variables, script names, or local absolute paths.
 - Position review appears only when holdings/trades or an explicit request triggered it.
 - HTML opens correctly, is readable on mobile, includes disclaimer, and uses the polished attachment template.

@@ -17,6 +17,23 @@ Use:
 - `stock_data.get_stock_kline` for A-share daily K-line.
 - `index_data.get_index_price_indicators` or `index_data.get_index_kline` for broad/sector index context.
 
+## Next-Session Tendency Evidence
+
+Every stock needs one next-session tendency: `向上`, `维持震荡`, or `向下`. Treat it as a conditional trading tendency, not a deterministic forecast.
+
+Use two evidence groups:
+
+- K-line/price-volume evidence: close position, daily return, volume/turnover/volume ratio, 5/10/20-day trend, recent high/low, support/resistance, gap, long upper/lower shadow, consecutive rise/fall, and relative strength versus market/sector when available.
+- Information/news evidence: announcements, earnings, company news, policy/industry/supply-chain news, upstream cost/supply changes, downstream demand/order changes, peer/substitute signals, abnormal event, capital-market event, or explicit lack of meaningful new information.
+
+Direction rules:
+
+- `向上`: price-volume structure is constructive and news/catalyst is supportive or at least not contradictory. Examples include closing near the high after increased volume, reclaiming short-term averages, sector/stock relative strength, positive announcement/news, or clear risk release.
+- `维持震荡`: K-line and information evidence are mixed, weak, catalyst-light, or mutually offsetting. This is the default when there is no clear edge.
+- `向下`: price-volume structure is weak and news/risk is negative or not enough to offset weakness. Examples include failed rebound, closing near the low, breakdown below short-term support, heavy-volume selloff, sector drag, negative announcement/news, or unresolved risk event.
+
+Always include a confidence label: `偏高`, `中等`, or `偏低`. Use `偏低` when K-line data is insufficient, news is stale, or market/sector context conflicts with the stock signal.
+
 ## Request Tiers
 
 Protect Wind quota. Start with Tier 1 and escalate only when triggered.
@@ -27,6 +44,7 @@ Use for ordinary daily reports and multi-stock pools.
 
 - Per stock: one compact price snapshot call.
 - Per stock: concise date-scoped announcement/news check.
+- Per stock: if compact fields are not enough to support the next-session tendency, add recent daily K-line data rather than guessing.
 - For the report: K-line only for the specified correlation pair.
 - Broad market index snapshot only when needed for overall context.
 
@@ -34,7 +52,7 @@ Use for ordinary daily reports and multi-stock pools.
 
 Use when previous-review conditions or next-session watch items require time-series confirmation.
 
-- Add `stock_data.get_stock_kline` for stocks needing K-line confirmation, usually near 60 trading days ending at report date.
+- Add `stock_data.get_stock_kline` for stocks needing K-line confirmation or a stronger next-session tendency, usually near 60 trading days ending at report date.
 - Add one broad benchmark snapshot and one relevant style/sector benchmark when available.
 - Prefer local calculations from K-line: 5/20/60-day trend, recent high/low, support/resistance, consecutive rise/fall, and return correlation.
 

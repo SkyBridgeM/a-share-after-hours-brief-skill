@@ -12,9 +12,9 @@ Include these sections in order:
 4. Portfolio overview: stock, code, close/change, turnover/turnover rate, key update, thesis impact.
 5. Stock cards: today's performance, information update, attribution, thesis impact.
 6. Major events: whether triggered, event type, event skill used, thesis impact.
-7. Industry news: material sector news, relevance, source links.
+7. Industry and supply-chain news: material upstream, own-segment, downstream, peer/substitute, and policy signals; relevance to each stock; source links.
 8. Correlation: pair, window, observation count, Pearson correlation, label, caveat.
-9. Next-session watch: observable variables, confirmation conditions, and invalidation conditions. Do not predict direction or price.
+9. Next-session tendency: for each stock, show exactly one visible tag from `向上` / `维持震荡` / `向下`, plus confidence, K-line evidence, information/news evidence, confirmation conditions, and invalidation conditions. Do not give exact target prices or present the tendency as certainty.
 10. Optional position review: original thesis, exit conditions, trigger status, reported execution, and discipline gap.
 11. Source and disclaimer.
 
@@ -28,14 +28,18 @@ Include these sections in order:
 
 - Mobile-first: single-column on phones; avoid wide tables when cards/key-value blocks work better.
 - Use embedded CSS, no remote images/fonts, and print-friendly contrast.
-- Use visual hierarchy: blue hero header, colored panels, metric cards, status pills, accent borders on stock cards.
+- Use a modern flat visual style: light gray page background, white surfaces, subtle borders, minimal shadows, restrained blue accent, and clear status pills.
+- Avoid heavy gradients, warm-paper palettes, glass effects, thick shadows, and decorative backgrounds.
+- Use visual hierarchy through spacing, borders, type weight, metric cards, status pills, and accent rules.
+- Follow A-share color convention for directional tags: `向上` / positive signals use red; `向下` / cautious signals use green; `维持震荡` uses neutral gray.
 - Let important event and condition-check sections breathe; do not compress away useful judgment.
+- Make the next-session tendency impossible to miss: use a clear status pill and a one-sentence explanation before detailed conditions.
 - Hide implementation details from user-facing output: condition IDs, raw JSON keys, Wind raw fields like `_DATE`, template variables, script names, and local absolute paths.
 - Translate internal enums before display (`mixed` -> `混合因素`, `stock_specific` -> `个股自身因素`, `sector` -> `行业/板块因素`, `market_beta` -> `市场因素`, `unknown` -> `暂无法归因`); show condition checks as natural-language conditions/evidence only.
 
 ## Gmail Summary Rules
 
-- Keep body short: conclusion, stock list, previous-review summary, key changes, next-session watch, and note to open attachment.
+- Keep body short: conclusion, stock list, previous-review summary, key changes, next-session tendency, and note to open attachment.
 - Do not include CSS, HTML tables, or rich layout in Gmail body.
 - Do not include internal IDs, raw field names, script names, or local paths.
 - Always attach the polished `.html` when creating a Gmail draft.

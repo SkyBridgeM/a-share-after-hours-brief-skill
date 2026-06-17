@@ -19,10 +19,11 @@ It does not pick stocks, trade, or write a full-market recap. It takes the stock
 - Reviews one stock or a small stock pool.
 - Verifies the previous review with `verified / partially_verified / not_verified / invalidated / unable_to_judge`.
 - Saves structured history as JSON in a `history/` folder next to the HTML output.
-- Uses market and industry baselines only for context, so the brief can separate market, sector, and stock-specific factors.
-- Handles announcements, earnings, meetings, policy changes, and industry news.
+- Uses market, sector, and supply-chain context to separate market, industry, upstream/downstream, and stock-specific factors.
+- Handles announcements, earnings, meetings, policy changes, industry news, and upstream/downstream signals.
+- Assigns a next-session tendency from `向上 / 维持震荡 / 向下`, with price-volume evidence, news evidence, and a confidence label.
 - Computes Pearson correlation from two stocks' K-line returns.
-- Uses an HTML template made for phone reading and email attachments.
+- Uses a modern flat HTML template made for phone reading and email attachments. Direction tags follow the A-share color convention: red for up, green for down.
 - Can create a short Gmail draft body when the user asks for one.
 - Checks position discipline only when the user provides holdings, trade records, or asks for it directly.
 
@@ -30,7 +31,7 @@ It does not pick stocks, trade, or write a full-market recap. It takes the stock
 
 - It does not provide default buy or sell recommendations.
 - It does not execute trades.
-- It does not predict 1-3 day price moves.
+- It does not provide deterministic price forecasts or target prices.
 - It does not generate a full market-wide recap by default.
 - It does not create weekly reviews or long-term memory by default.
 
@@ -114,12 +115,12 @@ The generated HTML review usually includes:
 4. Stock-pool overview
 5. Individual stock review cards
 6. Major events
-7. Industry news
+7. Industry and supply-chain news
 8. Correlation analysis
-9. Next-trading-day observation points
+9. Next-session directional tendency and validation conditions
 10. Optional position discipline review
 
-The "next-trading-day observation" section lists only variables and conditions that can be checked later. It does not make a directional price forecast.
+The next-session section chooses one of `向上 / 维持震荡 / 向下` and shows the confidence level. The judgment uses price-volume structure and information-side evidence, including announcements, policy or industry news, upstream cost or supply changes, downstream demand or orders, and peer or substitute signals. It is not a trading instruction and does not include a target price.
 
 ## JSON History
 
@@ -192,6 +193,7 @@ python3 scripts/review_journal.py build \
 - Node.js 18+, only for the npm installer
 - A Codex / Agent Skills compatible client
 - Wind data capability for A-share quotes, K-lines, announcements, and news
+- [Agent Reach](https://github.com/Panniantong/Agent-Reach) is optional. It can supplement external web, industry association, upstream/downstream, and peer news searches.
 - Gmail connector, only when Gmail draft creation is requested
 
 The bundled Python scripts use only the standard library.
