@@ -21,10 +21,10 @@ It does not pick stocks, trade, or write a full-market recap. It takes the stock
 - Saves structured history as JSON in a `history/` folder next to the HTML output.
 - Uses market, sector, and supply-chain context to separate market, industry, upstream/downstream, and stock-specific factors.
 - Handles announcements, earnings, meetings, policy changes, industry news, and upstream/downstream signals.
-- Assigns a next-session tendency from `向上 / 维持震荡 / 向下`, with price-volume evidence, news evidence, and a confidence label.
+- Separates assessability from direction. When evidence is sufficient, it assigns `向上 / 维持震荡 / 向下`; when evidence is insufficient, it records that explicitly instead of defaulting to sideways.
 - Computes Pearson correlation from two stocks' K-line returns.
 - Uses a modern flat HTML template made for phone reading and email attachments. Direction tags follow the A-share color convention: red for up, green for down.
-- Can create a short Gmail draft body when the user asks for one.
+- Can create a short Gmail draft body when the user asks for one. HTML attachment support is checked separately before claiming an attachment was added.
 - Checks position discipline only when the user provides holdings, trade records, or asks for it directly.
 
 ## Scope limits
@@ -55,6 +55,8 @@ Overwrite an existing installation:
 npx a-share-after-hours-brief-skill install --force
 ```
 
+`--force` first moves the existing installation to a timestamped backup directory. Use `--force --no-backup` only when you explicitly want to overwrite without a backup.
+
 Install to a custom skills directory:
 
 ```bash
@@ -71,10 +73,12 @@ npx github:SkyBridgeM/a-share-after-hours-brief-skill install
 
 ### Manual
 
-Copy the folder into your Codex skills directory:
+From the repository root, copy the skill files into the expected skill directory:
 
 ```bash
-cp -R a-share-after-hours-brief ~/.codex/skills/
+mkdir -p ~/.codex/skills/a-share-after-hours-brief
+cp -R SKILL.md agents assets references scripts schemas examples \
+  ~/.codex/skills/a-share-after-hours-brief/
 ```
 
 ## Usage examples
@@ -117,10 +121,10 @@ The generated HTML review usually includes:
 6. Major events
 7. Industry and supply-chain news
 8. Correlation analysis
-9. Next-session directional tendency and validation conditions
+9. Next-session assessment and validation conditions
 10. Optional position discipline review
 
-The next-session section chooses one of `向上 / 维持震荡 / 向下` and shows the confidence level. The judgment uses price-volume structure and information-side evidence, including announcements, policy or industry news, upstream cost or supply changes, downstream demand or orders, and peer or substitute signals. It is not a trading instruction and does not include a target price.
+The next-session section first decides whether the available evidence is assessable. If it is, the report chooses one of `向上 / 维持震荡 / 向下` and shows the confidence level. If evidence is insufficient, the report says so and does not force a sideways judgment. It is not a trading instruction and does not include a target price.
 
 ## JSON History
 
@@ -138,25 +142,33 @@ History rules:
 - JSON is the only structured history source.
 - The skill does not generate a Markdown history log.
 - The JSON record does not store absolute paths.
+- `generated_at` uses ISO 8601 with a timezone offset. A-share reports default to Asia/Shanghai.
 - The report directory can be moved or backed up as a folder.
 - Running the same stock pool again on the same day updates the matching JSON record.
+- Malformed history files are skipped with structured warnings instead of being silently ignored.
+- The formal schema lives at `schemas/history-v1.schema.json`; a sample record is available at `examples/history-record.example.json`.
 
-## Project structure
+## Repository structure
 
 ```text
-a-share-after-hours-brief/
+.
 ├── SKILL.md
 ├── agents/
 │   └── openai.yaml
 ├── assets/
 │   ├── brief-template.html
 │   └── plain-email-summary-template.md
+├── examples/
+│   └── history-record.example.json
 ├── references/
+│   ├── data-providers.md
 │   ├── event-triggers.md
 │   ├── history-and-review.md
 │   ├── html-email.md
 │   ├── industry-news.md
 │   └── wind-data.md
+├── schemas/
+│   └── history-v1.schema.json
 └── scripts/
     ├── correlation.py
     └── review_journal.py
@@ -192,7 +204,7 @@ python3 scripts/review_journal.py build \
 - Python 3.10+
 - Node.js 18+, only for the npm installer
 - A Codex / Agent Skills compatible client
-- Wind data capability for A-share quotes, K-lines, announcements, and news
+- Financial data capabilities for A-share quotes, adjusted K-lines, announcements, financial facts, benchmark context, and news. Wind MCP is preferred when available.
 - [Agent Reach](https://github.com/Panniantong/Agent-Reach) is optional. It can supplement external web, industry association, upstream/downstream, and peer news searches.
 - Gmail connector, only when Gmail draft creation is requested
 
@@ -210,6 +222,8 @@ You can also check the Python scripts directly:
 PYTHONPYCACHEPREFIX=/tmp/a-share-after-hours-brief-skill-pycache \
 python3 -m py_compile scripts/review_journal.py scripts/correlation.py
 ```
+
+The full check also runs Python unit tests and Node.js installer tests using only standard-library and built-in runtime features.
 
 If you have the Skill Creator validator:
 

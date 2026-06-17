@@ -19,10 +19,10 @@
 - 用本地 JSON 保存历史记录，默认放在 HTML 输出目录下的 `history/`。
 - 引入市场、行业和产业链背景作对照，用来区分市场、行业、上下游和个股因素。
 - 按触发规则处理公告、业绩、会议、政策、行业和上下游新闻。
-- 输出下一交易日三档倾向：`向上 / 维持震荡 / 向下`，并给出 K 线证据、消息证据和信心等级。
+- 将"能否判断"和"方向倾向"分开处理。证据充分时输出 `向上 / 维持震荡 / 向下`；证据不足时明确标注，不把缺数据硬写成震荡。
 - 基于两只股票的 K 线收益率计算 Pearson 相关性。
 - 使用适合手机阅读和邮件附件的现代扁平风 HTML 模板，A 股方向标签遵循红涨绿跌。
-- 用户需要时，可以生成简短 Gmail 草稿正文并附上 HTML 报告。
+- 用户需要时，可以生成简短 Gmail 草稿正文。HTML 附件是否已添加，需要以 Gmail 工具返回结果为准。
 - 只有在用户提供持仓、交易记录或明确要求时，才做持仓纪律检查。
 
 ## 能力边界
@@ -53,6 +53,8 @@ npx a-share-after-hours-brief-skill install
 npx a-share-after-hours-brief-skill install --force
 ```
 
+`--force` 会先把已有安装移动到带时间戳的备份目录。只有在明确不需要备份时，才使用 `--force --no-backup`。
+
 安装到自定义 skills 目录：
 
 ```bash
@@ -69,10 +71,12 @@ npx github:SkyBridgeM/a-share-after-hours-brief-skill install
 
 ### 手动安装
 
-把整个目录复制到 Codex skills 目录：
+在仓库根目录下，把 Skill 文件复制到 Codex 约定的安装目录：
 
 ```bash
-cp -R a-share-after-hours-brief ~/.codex/skills/
+mkdir -p ~/.codex/skills/a-share-after-hours-brief
+cp -R SKILL.md agents assets references scripts schemas examples \
+  ~/.codex/skills/a-share-after-hours-brief/
 ```
 
 ## 使用示例
@@ -105,10 +109,10 @@ cp -R a-share-after-hours-brief ~/.codex/skills/
 6. 重大事项
 7. 行业与产业链新闻
 8. 相关性
-9. 下一交易日方向倾向和验证条件
+9. 下一交易日评估和验证条件
 10. 可选持仓纪律检查
 
-下一交易日部分会在 `向上 / 维持震荡 / 向下` 中选择一档，并标注信心等级。这个结论来自 K 线/量价结构和信息面证据，包括公司公告、政策行业新闻、上游成本或供给、下游需求或订单，以及同业和替代技术变化。它不是交易指令，也不提供目标价。
+下一交易日部分会先判断证据是否足够。证据充分时，在 `向上 / 维持震荡 / 向下` 中选择一档，并标注信心等级；证据不足时会明确写出，不强行给出震荡判断。它不是交易指令，也不提供目标价。
 
 ## 历史 JSON
 
@@ -126,25 +130,33 @@ reports/
 - JSON 是唯一结构化历史数据源
 - 不生成 Markdown 历史日志
 - 不保存绝对路径
+- `generated_at` 使用带时区偏移的 ISO 8601 时间；A 股报告默认使用 Asia/Shanghai
 - 整个报告目录可以直接移动或备份
 - 同一天重复运行同一个股票池时，会更新对应 JSON
+- 损坏或不兼容的历史文件会以结构化 warning 呈现，不会静默跳过
+- 正式 schema 位于 `schemas/history-v1.schema.json`，示例记录位于 `examples/history-record.example.json`
 
-## 目录结构
+## 仓库结构
 
 ```text
-a-share-after-hours-brief/
+.
 ├── SKILL.md
 ├── agents/
 │   └── openai.yaml
 ├── assets/
 │   ├── brief-template.html
 │   └── plain-email-summary-template.md
+├── examples/
+│   └── history-record.example.json
 ├── references/
+│   ├── data-providers.md
 │   ├── event-triggers.md
 │   ├── history-and-review.md
 │   ├── html-email.md
 │   ├── industry-news.md
 │   └── wind-data.md
+├── schemas/
+│   └── history-v1.schema.json
 └── scripts/
     ├── correlation.py
     └── review_journal.py
@@ -180,7 +192,7 @@ python3 scripts/review_journal.py build \
 - Python 3.10+
 - Node.js 18+，仅用于 npm 安装脚本
 - Codex / Agent Skills 兼容客户端
-- Wind 数据能力，用于 A 股行情、K 线、公告和新闻
+- A 股行情、复权 K 线、公告、财务事实、基准指数和新闻等金融数据能力；可用时优先使用 Wind MCP
 - [Agent Reach](https://github.com/Panniantong/Agent-Reach) 可选，用于补充外部网页、行业协会、上下游和同业新闻搜索
 - Gmail 连接器，仅在需要创建 Gmail 草稿时使用
 
@@ -198,6 +210,8 @@ npm run check
 PYTHONPYCACHEPREFIX=/tmp/a-share-after-hours-brief-skill-pycache \
 python3 -m py_compile scripts/review_journal.py scripts/correlation.py
 ```
+
+完整 `npm run check` 还会运行 Python 单元测试和 Node.js 安装器测试，测试依赖只使用标准库和 Node.js 内置模块。
 
 如果你有 Skill Creator 的验证脚本：
 

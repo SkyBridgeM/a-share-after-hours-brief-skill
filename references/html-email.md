@@ -14,14 +14,14 @@ Include these sections in order:
 6. Major events: whether triggered, event type, event skill used, thesis impact.
 7. Industry and supply-chain news: material upstream, own-segment, downstream, peer/substitute, and policy signals; relevance to each stock; source links.
 8. Correlation: pair, window, observation count, Pearson correlation, label, caveat.
-9. Next-session tendency: for each stock, show exactly one visible tag from `向上` / `维持震荡` / `向下`, plus confidence, K-line evidence, information/news evidence, confirmation conditions, and invalidation conditions. Do not give exact target prices or present the tendency as certainty.
+9. Next-session assessment: for each stock, show assessment status, confidence, K-line evidence, information/news evidence, confirmation conditions, and invalidation conditions. If assessable, show exactly one visible tag from `向上` / `维持震荡` / `向下`. If evidence is insufficient, show `证据不足` and do not display a directional tag. Do not give exact target prices or present the tendency as certainty.
 10. Optional position review: original thesis, exit conditions, trigger status, reported execution, and discipline gap.
 11. Source and disclaimer.
 
 ## Deliverables
 
 - Polished report: static mobile-friendly `.html` using `assets/brief-template.html`.
-- Gmail draft: plain summary using `assets/plain-email-summary-template.md`, with the polished `.html` attached.
+- Gmail draft: plain summary using `assets/plain-email-summary-template.md`; attach the polished `.html` only when the Gmail tool confirms local attachment support and upload success.
 - Do not send polished HTML as Gmail body through the connector.
 
 ## HTML Attachment Rules
@@ -31,15 +31,18 @@ Include these sections in order:
 - Use a modern flat visual style: light gray page background, white surfaces, subtle borders, minimal shadows, restrained blue accent, and clear status pills.
 - Avoid heavy gradients, warm-paper palettes, glass effects, thick shadows, and decorative backgrounds.
 - Use visual hierarchy through spacing, borders, type weight, metric cards, status pills, and accent rules.
-- Follow A-share color convention for directional tags: `向上` / positive signals use red; `向下` / cautious signals use green; `维持震荡` uses neutral gray.
+- Follow A-share color convention for directional tags: `向上` / positive signals use red; `向下` / cautious signals use green; `维持震荡` and `证据不足` use neutral gray.
 - Let important event and condition-check sections breathe; do not compress away useful judgment.
-- Make the next-session tendency impossible to miss: use a clear status pill and a one-sentence explanation before detailed conditions.
+- Make the next-session assessment impossible to miss: use a clear status pill and a one-sentence explanation before detailed conditions.
 - Hide implementation details from user-facing output: condition IDs, raw JSON keys, Wind raw fields like `_DATE`, template variables, script names, and local absolute paths.
 - Translate internal enums before display (`mixed` -> `混合因素`, `stock_specific` -> `个股自身因素`, `sector` -> `行业/板块因素`, `market_beta` -> `市场因素`, `unknown` -> `暂无法归因`); show condition checks as natural-language conditions/evidence only.
 
 ## Gmail Summary Rules
 
-- Keep body short: conclusion, stock list, previous-review summary, key changes, next-session tendency, and note to open attachment.
+- Keep body short: conclusion, stock list, previous-review summary, key changes, next-session assessment, and note to open the attached or local HTML report.
 - Do not include CSS, HTML tables, or rich layout in Gmail body.
 - Do not include internal IDs, raw field names, script names, or local paths.
-- Always attach the polished `.html` when creating a Gmail draft.
+- Inspect available Gmail tool capabilities before claiming attachment support.
+- Treat plain draft creation and attachment upload as separate actions. Never claim an attachment was added unless the tool result confirms it.
+- If attachments are unsupported, create only the plain-text draft when that is consistent with the user's request, then state that the HTML report remains at the local output path.
+- Never send an email unless the user explicitly authorizes sending and provides recipients.

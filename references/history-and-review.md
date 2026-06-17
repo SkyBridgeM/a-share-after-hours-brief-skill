@@ -2,14 +2,19 @@
 
 Use `scripts/review_journal.py` for portable JSON history.
 
+Schema: `schemas/history-v1.schema.json`. Example record: `examples/history-record.example.json`.
+
 ## Storage
 
 - Default directory: `<HTML output directory>/history/`.
 - Override with `history_dir`.
 - JSON is the only history source. Do not generate Markdown logs.
 - Records must not contain absolute paths.
+- `schema_version` remains `1`.
+- `generated_at` must be an ISO 8601 timestamp with timezone offset. Use Asia/Shanghai (`+08:00`) for A-share reports unless the user explicitly requests another timezone.
 - File name: `<report-date>__<sorted-stock-codes>.json`.
 - Same date and same stock pool are atomically replaced; other pools are untouched.
+- Old records without `next_session_assessment` remain readable for lookup and previous-review evaluation.
 
 ## Commands
 
@@ -31,6 +36,25 @@ python3 scripts/review_journal.py build \
 ```
 
 Use `--history-dir` to override the default. Use `--history off` to validate and emit the record without saving. Use `--compare-previous false` to skip lookup.
+
+Lookup output includes metadata and warnings:
+
+```json
+{
+  "records_loaded": 12,
+  "warnings": [
+    {
+      "file": "2026-06-10__300750-SZ.json",
+      "reason": "invalid JSON"
+    }
+  ],
+  "results": {
+    "300750.SZ": null
+  }
+}
+```
+
+Warnings use filenames relative to the history directory. Do not surface absolute local paths in user-facing reports.
 
 ## Condition contract
 
@@ -97,6 +121,11 @@ The script calculates the status. The agent supplies evidence-backed condition o
       "facts": {},
       "attribution": "mixed",
       "thesis_change": "未改变",
+      "next_session_assessment": {
+        "assessment_status": "assessable",
+        "tendency": "维持震荡",
+        "confidence": "中等"
+      },
       "condition_results": [],
       "review_adjustment": "继续观察量能与行业相对强弱",
       "next_session_watch": {
@@ -111,3 +140,32 @@ The script calculates the status. The agent supplies evidence-backed condition o
 ```
 
 Allowed attribution values: `market_beta`, `sector`, `stock_specific`, `mixed`, `unknown`.
+
+## Next-session assessment contract
+
+Assessability and direction are separate fields:
+
+```json
+{
+  "assessment_status": "assessable",
+  "tendency": "向上",
+  "confidence": "中等"
+}
+```
+
+When evidence is insufficient:
+
+```json
+{
+  "assessment_status": "insufficient_evidence",
+  "tendency": null,
+  "confidence": "偏低"
+}
+```
+
+Rules:
+
+- `assessment_status` must be `assessable` or `insufficient_evidence`.
+- `tendency` must be `向上`, `维持震荡`, `向下`, or `null`.
+- `tendency` must be `null` when `assessment_status` is `insufficient_evidence`.
+- Do not use `维持震荡` merely because data is missing.

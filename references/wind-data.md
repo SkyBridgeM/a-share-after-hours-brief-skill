@@ -1,6 +1,6 @@
 # Wind Data Notes
 
-Use `wind-mcp-skill` for A-share行情、K线、公告、新闻、财务、事件、技术和风险数据. Do not replace these facts with web search or model memory.
+Prefer `wind-mcp-skill` for A-share行情、K线、公告、新闻、财务、事件、技术和风险数据 when available. Required capabilities and provider-labeling rules live in `references/data-providers.md`. Do not replace unavailable financial facts with web search or model memory.
 
 ## Default Fields
 
@@ -17,9 +17,14 @@ Use:
 - `stock_data.get_stock_kline` for A-share daily K-line.
 - `index_data.get_index_price_indicators` or `index_data.get_index_kline` for broad/sector index context.
 
-## Next-Session Tendency Evidence
+## Next-Session Assessment Evidence
 
-Every stock needs one next-session tendency: `向上`, `维持震荡`, or `向下`. Treat it as a conditional trading tendency, not a deterministic forecast.
+Every stock needs a next-session assessment. Assessability and direction are separate:
+
+- `assessment_status: "assessable"` means available price-volume and information evidence is sufficient for a conditional tendency.
+- `assessment_status: "insufficient_evidence"` means evidence is too thin or unavailable; set `tendency: null` and `confidence: "偏低"`.
+
+For assessable stocks, `tendency` is one of `向上`, `维持震荡`, or `向下`. Treat it as a conditional trading tendency, not a deterministic forecast.
 
 Use two evidence groups:
 
@@ -29,10 +34,10 @@ Use two evidence groups:
 Direction rules:
 
 - `向上`: price-volume structure is constructive and news/catalyst is supportive or at least not contradictory. Examples include closing near the high after increased volume, reclaiming short-term averages, sector/stock relative strength, positive announcement/news, or clear risk release.
-- `维持震荡`: K-line and information evidence are mixed, weak, catalyst-light, or mutually offsetting. This is the default when there is no clear edge.
+- `维持震荡`: K-line and information evidence are assessable but mixed, weak, catalyst-light, or mutually offsetting.
 - `向下`: price-volume structure is weak and news/risk is negative or not enough to offset weakness. Examples include failed rebound, closing near the low, breakdown below short-term support, heavy-volume selloff, sector drag, negative announcement/news, or unresolved risk event.
 
-Always include a confidence label: `偏高`, `中等`, or `偏低`. Use `偏低` when K-line data is insufficient, news is stale, or market/sector context conflicts with the stock signal.
+Always include a confidence label: `偏高`, `中等`, or `偏低`. Use `insufficient_evidence` rather than `维持震荡` when K-line data, news, or market/sector context is unavailable or too incomplete to assess.
 
 ## Request Tiers
 
@@ -44,7 +49,7 @@ Use for ordinary daily reports and multi-stock pools.
 
 - Per stock: one compact price snapshot call.
 - Per stock: concise date-scoped announcement/news check.
-- Per stock: if compact fields are not enough to support the next-session tendency, add recent daily K-line data rather than guessing.
+- Per stock: if compact fields are not enough to support the next-session assessment, add recent daily K-line data rather than guessing.
 - For the report: K-line only for the specified correlation pair.
 - Broad market index snapshot only when needed for overall context.
 
