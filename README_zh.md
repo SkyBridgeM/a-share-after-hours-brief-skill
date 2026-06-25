@@ -125,7 +125,7 @@ K 线输出分为两层：一层是个股自身的技术结构，另一层是相
 
 ```text
 reports/
-├── 2026-06-16_A股盘后复盘.html
+├── 2026-06-16__a-share-after-hours__300750-SZ_600519-SH.html
 └── history/
     └── 2026-06-16__300750-SZ_600519-SH.json
 ```
@@ -140,6 +140,20 @@ reports/
 - 同一天重复运行同一个股票池时，会更新对应 JSON
 - 损坏或不兼容的历史文件会以结构化 warning 呈现，不会静默跳过
 - 正式 schema 位于 `schemas/history-v1.schema.json`，示例记录位于 `examples/history-record.example.json`
+
+## 文件命名
+
+新的本地文件统一使用稳定的 ASCII 文件名，中文标题保留在 HTML 或 Markdown 内容里。目录名可以配置；这里标准化的是文件命名，不是强制固定唯一存储路径。
+
+| 文件类型 | 命名格式 |
+| --- | --- |
+| HTML 报告 | `<report-output-dir>/YYYY-MM-DD__a-share-after-hours__<sorted-stock-codes>.html` |
+| history JSON | `<history-dir>/YYYY-MM-DD__<sorted-stock-codes>.json` |
+| 运行状态 / 日志 | `<state-or-log-dir>/YYYY-MM-DD.<purpose>.json`、`.txt` 或 `.log` |
+| 原始运行数据 | `<data-dir>/YYYY-MM-DD-data/<code>_<kind>.json`，或其他带日期的 `data` / `raw_data` 路径 |
+| 月度总结 | `monthly-summary-YYYY-MM.html`、`.md` 或 `.json` |
+
+示例文件名：`2026-06-25__a-share-after-hours__002745-SZ_301307-SZ.html`。
 
 ## 本地存储清理
 
@@ -163,6 +177,12 @@ reports/
 python3 scripts/cleanup_reports.py --root ./reports
 ```
 
+如果旧项目把产物分散放在多个地方，例如 HTML 报告在工作区根目录、`history/` 也在根目录，或另有原始数据、运行状态、日志目录，可以对工作区根目录做预览：
+
+```bash
+python3 scripts/cleanup_reports.py --root .
+```
+
 确认无误后再删除：
 
 ```bash
@@ -172,7 +192,7 @@ python3 scripts/cleanup_reports.py \
   --apply
 ```
 
-脚本会列出准备删除的文件、预计释放的空间，以及跳过某些文件的原因。当前月份的文件不会删除。超过 90 天的 history JSON 也不会立刻删，只有同月份的月度总结已经存在时，脚本才允许清理对应的日度历史记录。
+脚本会列出准备删除的文件、预计释放的空间，以及跳过某些文件的原因。当前月份的文件不会删除。超过 90 天的 history JSON 也不会立刻删，只有同月份的月度总结已经存在时，脚本才允许清理对应的日度历史记录。`logs/`、`state/`、`run-state/`、`runtime/`、`automation-state/` 等明显运行状态或日志目录下的带日期 JSON/TXT/LOG 文件按日志处理。带日期的 `data`、`raw_data` 或 `*-data` 产物按原始数据处理。普通业务 JSON 默认不会因为扩展名是 `.json` 而被清理。
 
 ## 仓库结构
 

@@ -11,11 +11,12 @@ Create a practical Chinese after-hours review for one or more specified A-share 
 
 - Timezone: use Asia/Shanghai for A-share report dates and generated timestamps unless the user explicitly specifies another timezone. Store `generated_at` as ISO 8601 with offset, for example `2026-06-17T16:30:00+08:00`.
 - Report date: use the user-specified date; otherwise use today's date in the report timezone. Convert relative dates such as `昨天` or `上周五` into concrete dates and show the date in the report.
-- Output path: if the user does not specify one, save under `reports/` in the current workspace with a date-and-stock filename.
+- Output path: if the user does not specify one, save new reports under `reports/` in the current workspace with a date-and-stock filename. If the workspace already has legacy reports in the workspace root, do not move or rewrite them unless the user asks.
+- File naming: use stable ASCII filenames for new local artifacts, but do not hard-code storage paths. HTML reports should use `YYYY-MM-DD__a-share-after-hours__<sorted-stock-codes>.html`, for example `2026-06-25__a-share-after-hours__002745-SZ_301307-SZ.html`. History records should use `YYYY-MM-DD__<sorted-stock-codes>.json`. Run state and logs should use `YYYY-MM-DD.<purpose>.json`, `.txt`, or `.log`. Raw data should live in directories or files whose names include `data`, `raw_data`, or `*-data`. Monthly summaries should use `monthly-summary-YYYY-MM.html`, `.md`, or `.json` wherever the monthly archive is stored. Keep Chinese report titles inside the document, not in filenames.
 - Length: standard multi-stock brief is 2-4 HTML pages; use 1-2 pages only when the user asks for a short version.
 - Correlation: compare the user-specified pair; if omitted, compare the first two stocks and label the assumption.
 - History: `history=on`, `compare_previous=true`. Save JSON under `<HTML output directory>/history/` unless `history_dir` is supplied.
-- Storage cleanup: when the user asks to review or clean local report storage, use `scripts/cleanup_reports.py` with `--root <report-output-dir>`. The command is dry-run by default. Do not pass `--apply` unless the user explicitly asks to delete files.
+- Storage cleanup: when the user asks to review or clean local report storage, use `scripts/cleanup_reports.py` with `--root <artifact-root>`. If the current report output directory is unknown, first discover likely local artifact roots from date-stamped report HTML, `history/` folders, raw data folders, charts, cache, or log/run-state folders. For legacy workspaces with artifacts scattered under the workspace root, run the cleanup preview with `--root <workspace-root>` and state that this is a legacy-layout scan. The command is dry-run by default. Do not pass `--apply` unless the user explicitly asks to delete files.
 - Position review: enable only when the user provides holdings/trades or explicitly asks for discipline review.
 - Gmail: create drafts by default when requested; never send until the user explicitly authorizes sending and gives recipients. Do not put rich HTML in the Gmail body. Confirm attachment capability before claiming the HTML file was attached.
 - Notion: do not sync.
@@ -51,9 +52,11 @@ Create a practical Chinese after-hours review for one or more specified A-share 
 
 4. **Storage cleanup, only when requested**
    - Read `config/storage-policy.example.json` for the default local retention policy.
-   - Use `scripts/cleanup_reports.py --root <report-output-dir>` to preview old local artifacts. It reports delete candidates, estimated space savings, and skipped files with reasons.
+   - Use `scripts/cleanup_reports.py --root <artifact-root>` to preview old local artifacts. It reports delete candidates, estimated space savings, and skipped files with reasons.
+   - Prefer the current report output directory when it is known. If it is not known, discover likely local artifact roots before scanning: folders containing date-stamped report HTML, a `history/` folder, raw data, charts, cache, or log/run-state artifacts. If the workspace uses a legacy layout with artifacts scattered under the workspace root, scan the workspace root and label the result as a legacy-layout preview.
    - Do not delete current-month files.
    - History JSON older than the retention window may be deleted only when a monthly summary for the same month exists.
+   - Run state files are local artifacts, whether they come from automation, manual scripts, or one-off runs. Treat dated JSON/TXT/LOG files in obvious run-state or log directories as logs, and dated `data` / `raw_data` / `*-data` artifacts as raw data for retention purposes. Keep README/documentation files, ordinary business JSON, and undated files unless the user explicitly asks for a separate manual cleanup.
    - Run with `--apply` only after the user clearly asks for actual deletion.
 
 5. **Industry news**

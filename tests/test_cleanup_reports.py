@@ -129,6 +129,63 @@ class CleanupReportsTests(unittest.TestCase):
             },
         )
 
+    def test_run_state_json_txt_and_log_are_treated_as_logs(self):
+        self.write_file("state/2026-05-01.json")
+        self.write_file("run-state/2026-05-01.draft.json")
+        self.write_file("runtime/2026-05-01.summary.txt")
+        self.write_file("automation-state/2026-05-01.log")
+        self.write_file("state/README.md")
+
+        plan = self.plan()
+        self.assertEqual(
+            self.delete_paths(plan),
+            {
+                "state/2026-05-01.json",
+                "run-state/2026-05-01.draft.json",
+                "runtime/2026-05-01.summary.txt",
+                "automation-state/2026-05-01.log",
+            },
+        )
+        self.assertEqual(
+            self.skipped_reasons(plan)["state/README.md"],
+            "not covered by storage policy",
+        )
+
+    def test_nested_reports_html_is_recognized(self):
+        self.write_file("somewhere/reports/2026-05-01__a-share-after-hours__002745-SZ.html")
+        plan = self.plan()
+        self.assertEqual(
+            self.delete_paths(plan),
+            {"somewhere/reports/2026-05-01__a-share-after-hours__002745-SZ.html"},
+        )
+
+    def test_nested_state_json_is_treated_as_logs(self):
+        self.write_file("nested/workspace/state/2026-05-01.json")
+        plan = self.plan()
+        self.assertEqual(
+            self.delete_paths(plan),
+            {"nested/workspace/state/2026-05-01.json"},
+        )
+
+    def test_data_folder_is_treated_as_raw_data_before_state_logs(self):
+        self.write_file("state/2026-05-01-data/raw.json")
+        plan = self.plan()
+        self.assertEqual(len(plan.delete), 1)
+        self.assertEqual(plan.delete[0].category, "raw_data")
+        self.assertEqual(
+            plan.delete[0].path.relative_to(self.root).as_posix(),
+            "state/2026-05-01-data/raw.json",
+        )
+
+    def test_plain_business_json_is_not_treated_as_logs(self):
+        self.write_file("exports/2026-05-01-business.json")
+        plan = self.plan()
+        self.assertEqual(self.delete_paths(plan), set())
+        self.assertEqual(
+            self.skipped_reasons(plan)["exports/2026-05-01-business.json"],
+            "not covered by storage policy",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

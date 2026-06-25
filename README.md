@@ -137,7 +137,7 @@ By default, history is saved next to the HTML output:
 
 ```text
 reports/
-├── 2026-06-16_A-share-after-hours-brief.html
+├── 2026-06-16__a-share-after-hours__300750-SZ_600519-SH.html
 └── history/
     └── 2026-06-16__300750-SZ_600519-SH.json
 ```
@@ -152,6 +152,20 @@ History rules:
 - Running the same stock pool again on the same day updates the matching JSON record.
 - Malformed history files are skipped with structured warnings instead of being silently ignored.
 - The formal schema lives at `schemas/history-v1.schema.json`; a sample record is available at `examples/history-record.example.json`.
+
+## File naming
+
+Use stable ASCII filenames for new local artifacts and keep Chinese titles inside the HTML or Markdown content. The directory names are configurable; the pattern standardizes filenames, not a single mandatory storage path.
+
+| Artifact | Pattern |
+| --- | --- |
+| HTML report | `<report-output-dir>/YYYY-MM-DD__a-share-after-hours__<sorted-stock-codes>.html` |
+| History JSON | `<history-dir>/YYYY-MM-DD__<sorted-stock-codes>.json` |
+| Run state / logs | `<state-or-log-dir>/YYYY-MM-DD.<purpose>.json`, `.txt`, or `.log` |
+| Raw run data | `<data-dir>/YYYY-MM-DD-data/<code>_<kind>.json` or another dated `data` / `raw_data` path |
+| Monthly summary | `monthly-summary-YYYY-MM.html`, `.md`, or `.json` |
+
+Example filename: `2026-06-25__a-share-after-hours__002745-SZ_301307-SZ.html`.
 
 ## Local storage cleanup
 
@@ -175,6 +189,12 @@ Preview cleanup:
 python3 scripts/cleanup_reports.py --root ./reports
 ```
 
+For older workspaces that keep artifacts in several places, such as report HTML in the workspace root, `history/` at the root, raw data folders, or run-state/log directories, run the preview against the workspace root instead:
+
+```bash
+python3 scripts/cleanup_reports.py --root .
+```
+
 Apply cleanup:
 
 ```bash
@@ -184,7 +204,7 @@ python3 scripts/cleanup_reports.py \
   --apply
 ```
 
-The script prints the files it would delete, the estimated space that would be freed, and the files it skipped with reasons. It never deletes current-month files. History JSON older than 90 days is deleted only when a monthly summary for the same month already exists, so daily review records are not removed before a monthly archive is in place.
+The script prints the files it would delete, the estimated space that would be freed, and the files it skipped with reasons. It never deletes current-month files. History JSON older than 90 days is deleted only when a monthly summary for the same month already exists, so daily review records are not removed before a monthly archive is in place. Dated JSON/TXT/LOG files in obvious run-state or log directories, such as `logs/`, `state/`, `run-state/`, `runtime/`, or `automation-state/`, are treated as logs. Dated `data`, `raw_data`, or `*-data` artifacts are treated as raw data. Ordinary business JSON outside those artifact directories is not deleted by default.
 
 ## Repository structure
 

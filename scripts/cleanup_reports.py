@@ -138,6 +138,18 @@ def path_parts_lower(path: Path) -> list[str]:
     return [part.lower() for part in path.parts]
 
 
+def is_run_state_path(parts: list[str]) -> bool:
+    state_parts = {
+        "logs",
+        "log",
+        "state",
+        "run-state",
+        "runtime",
+        "automation-state",
+    }
+    return any(part in state_parts or part.endswith("-state") for part in parts)
+
+
 def classify_file(root: Path, path: Path, monthly_summary_months: set[str]) -> tuple[str | None, str | None]:
     if path.is_symlink():
         return None, "symlink skipped"
@@ -152,7 +164,7 @@ def classify_file(root: Path, path: Path, monthly_summary_months: set[str]) -> t
         return "history_json", None
     if any(part in {"cache", ".cache", "__pycache__"} for part in parts) or suffix in {".pyc", ".pyo"}:
         return "cache", None
-    if any(part == "logs" for part in parts) or suffix == ".log":
+    if any(part in {"logs", "log"} for part in parts) or suffix == ".log":
         return "logs", None
     if any(part == "charts" for part in parts) or suffix in CHART_EXTENSIONS:
         return "charts", None
@@ -160,7 +172,9 @@ def classify_file(root: Path, path: Path, monthly_summary_months: set[str]) -> t
         if suffix in RAW_DATA_EXTENSIONS:
             return "raw_data", None
         return None, "raw data directory file type is not covered"
-    if suffix == ".html" and rel.parent == Path("."):
+    if is_run_state_path(parts) and suffix in {".json", ".txt", ".log"}:
+        return "logs", None
+    if suffix == ".html" and (rel.parent == Path(".") or "reports" in parts):
         return "html", None
 
     return None, "not covered by storage policy"
