@@ -10,6 +10,7 @@ const REQUIRED_ENTRIES = [
   "SKILL.md",
   "agents",
   "assets",
+  "config",
   "examples",
   "references",
   "schemas",

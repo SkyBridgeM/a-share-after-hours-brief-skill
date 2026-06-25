@@ -1,0 +1,11 @@
+{
+  "retention_days": {
+    "html": 30,
+    "charts": 30,
+    "raw_data": 14,
+    "cache": 7,
+    "logs": 14,
+    "history_json": 90
+  },
+  "monthly_summary": "keep_forever"
+}

@@ -15,6 +15,7 @@ Create a practical Chinese after-hours review for one or more specified A-share 
 - Length: standard multi-stock brief is 2-4 HTML pages; use 1-2 pages only when the user asks for a short version.
 - Correlation: compare the user-specified pair; if omitted, compare the first two stocks and label the assumption.
 - History: `history=on`, `compare_previous=true`. Save JSON under `<HTML output directory>/history/` unless `history_dir` is supplied.
+- Storage cleanup: when the user asks to review or clean local report storage, use `scripts/cleanup_reports.py` with `--root <report-output-dir>`. The command is dry-run by default. Do not pass `--apply` unless the user explicitly asks to delete files.
 - Position review: enable only when the user provides holdings/trades or explicitly asks for discipline review.
 - Gmail: create drafts by default when requested; never send until the user explicitly authorizes sending and gives recipients. Do not put rich HTML in the Gmail body. Confirm attachment capability before claiming the HTML file was attached.
 - Notion: do not sync.
@@ -48,24 +49,31 @@ Create a practical Chinese after-hours review for one or more specified A-share 
    - For each overlapping stock, evaluate the previous record's confirmation and invalidation conditions from current provider-backed facts. Mark each condition `met`, `not_met`, or `unknown`; never infer missing facts.
    - Use `scripts/review_journal.py build` to calculate the final review status and atomically save the current JSON record.
 
-4. **Industry news**
+4. **Storage cleanup, only when requested**
+   - Read `config/storage-policy.example.json` for the default local retention policy.
+   - Use `scripts/cleanup_reports.py --root <report-output-dir>` to preview old local artifacts. It reports delete candidates, estimated space savings, and skipped files with reasons.
+   - Do not delete current-month files.
+   - History JSON older than the retention window may be deleted only when a monthly summary for the same month exists.
+   - Run with `--apply` only after the user clearly asks for actual deletion.
+
+5. **Industry news**
    - Use web/current news only as supplemental context when industry or supply-chain news may affect the brief.
    - For each stock, identify the company's value-chain position before selecting news: upstream inputs/supply, the company's own segment, downstream demand/customers/channels, and close peers/substitutes.
    - Prioritize news that changes costs, supply, prices, orders, demand, policy constraints, or customer/peer expectations. Avoid broad industry news that cannot be tied to the specified stock's value chain.
    - Cite links for material external news.
    - Read `references/industry-news.md` when using external industry news.
 
-5. **Major events**
+6. **Major events**
    - Check announcements, news, earnings, meeting notes, abnormal moves, and policy/industry shocks.
    - Call event skills only when trigger conditions are met; do not expand routine disclosures.
    - Read `references/event-triggers.md` before invoking event skills.
 
-6. **Correlation**
+7. **Correlation**
    - Use provider-backed K-line series; calculate correlation locally from aligned daily returns.
    - Use `scripts/correlation.py` when K-line data is saved as JSON/CSV.
    - If common return observations are fewer than 30, report sample insufficiency and avoid a directional conclusion.
 
-7. **Next-session assessment**
+8. **Next-session assessment**
    - For each stock, separate assessability from direction using `next_session_assessment`.
    - If evidence is sufficient, set `assessment_status: "assessable"` and choose exactly one tendency: `向上`, `维持震荡`, or `向下`.
    - If evidence is insufficient, set `assessment_status: "insufficient_evidence"`, set `tendency: null`, and use `confidence: "偏低"`. Do not use `维持震荡` merely because data is missing.
@@ -86,12 +94,12 @@ Create a practical Chinese after-hours review for one or more specified A-share 
    - Give 2-4 observable conditions for the next session: what would confirm the tendency, what would invalidate it, and what price/volume/news signal matters most.
    - Do not give exact target prices or treat the tendency as certainty. Phrase it as a conditional judgment based on current K-line and news evidence.
 
-8. **Optional position review**
+9. **Optional position review**
    - When triggered, compare the user's original thesis and exit conditions with current facts.
    - State whether an exit condition was triggered and whether the user reports executing it.
    - Do not invent position size, cost, exit conditions, or transactions.
 
-9. **Write and deliver**
+10. **Write and deliver**
    - Use `references/html-email.md` for sections, length, HTML attachment, mobile layout, Gmail summary body, and attachment rules.
    - Use `assets/brief-template.html` for the polished HTML attachment.
    - Use `assets/plain-email-summary-template.md` for Gmail body.
@@ -111,8 +119,10 @@ Before delivery, check:
 - Previous-review conditions use current facts and valid IDs from the prior record.
 - Industry/news analysis distinguishes upstream, own segment, downstream, and peer/substitute signals when those signals are material and available.
 - History JSON conforms to schema version 1, stores `generated_at` with timezone offset, and contains no absolute paths, exact target prices, or deterministic prediction language.
+- Local cleanup, if requested, ran as dry-run unless the user explicitly asked to delete files. Current-month files and monthly summaries were not deleted.
 - Each stock has a visible next-session assessment. Assessable stocks show one tendency from `向上` / `维持震荡` / `向下`; insufficient-evidence stocks show no tendency and explain missing evidence.
 - User-facing HTML/Gmail does not expose internal condition IDs, raw provider field names, raw JSON keys, template variables, script names, or local absolute paths.
+- User-facing HTML uses Chinese headings and labels by default; keep English only for stock codes, official names, URLs, or unavoidable source names.
 - Position review appears only when holdings/trades or an explicit request triggered it.
 - HTML opens correctly, is readable on mobile, includes disclaimer, and uses the polished attachment template.
 - Gmail draft, if created, has a readable plain summary body. Claim an HTML attachment only when attachment upload was confirmed; do not imply the email was sent.

@@ -19,6 +19,7 @@
     "SKILL.md",
     "agents",
     "assets",
+    "config",
     "examples",
     "references",
     "schemas",
@@ -29,7 +30,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "check": "node bin/install.js --dry-run && PYTHONPYCACHEPREFIX=/tmp/a-share-after-hours-brief-skill-pycache python3 -m py_compile scripts/review_journal.py scripts/correlation.py scripts/kline_features.py && PYTHONPYCACHEPREFIX=/tmp/a-share-after-hours-brief-skill-pycache python3 -m unittest discover -s tests -p 'test_*.py' && node --test tests/test_installer.mjs"
+    "check": "node bin/install.js --dry-run && PYTHONPYCACHEPREFIX=/tmp/a-share-after-hours-brief-skill-pycache python3 -m py_compile scripts/review_journal.py scripts/correlation.py scripts/kline_features.py scripts/cleanup_reports.py && PYTHONPYCACHEPREFIX=/tmp/a-share-after-hours-brief-skill-pycache python3 -m unittest discover -s tests -p 'test_*.py' && node --test tests/test_installer.mjs"
   },
   "keywords": [
     "codex",

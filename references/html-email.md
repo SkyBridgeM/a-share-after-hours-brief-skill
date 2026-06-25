@@ -28,14 +28,16 @@ Include these sections in order:
 
 - Mobile-first: single-column on phones; avoid wide tables when cards/key-value blocks work better.
 - Use embedded CSS, no remote images/fonts, and print-friendly contrast.
-- Use a modern flat visual style: light gray page background, white surfaces, subtle borders, minimal shadows, restrained blue accent, and clear status pills.
-- Avoid heavy gradients, warm-paper palettes, glass effects, thick shadows, and decorative backgrounds.
+- Use a concise modern financial-app style: light gray page background, white surfaces, subtle borders, restrained blue accent, clear judgment tile, and compact signal blocks.
+- Avoid heavy gradients, warm-paper palettes, glass effects, thick shadows, decorative backgrounds, and unnecessary nested cards.
 - Use visual hierarchy through spacing, borders, type weight, metric cards, status pills, and accent rules.
+- Keep all user-facing headings, badges, status labels, and table headers in Chinese. English is acceptable only for stock codes, official company/product names, URLs, or unavoidable source names.
+- Use simple Chinese labels such as `盘后判断`, `技术结构`, `相对表现`, `量能质量`, `信息面`, `确认条件`, and `失效条件`. Do not display raw enum names, template variable names, CSS class names, or script field names.
 - Follow A-share color convention for directional tags: `向上` / positive signals use red; `向下` / cautious signals use green; `维持震荡` and `证据不足` use neutral gray.
 - Let important event and condition-check sections breathe; do not compress away useful judgment.
 - Make the next-session assessment impossible to miss: use a clear status pill and a one-sentence explanation before detailed conditions.
 - For next-session cards, prefer the template classes `assessment-card`, `assessment-up`, `assessment-sideways`, `assessment-down`, and `assessment-insufficient`. Pair them with `tag-up`, `tag-sideways`, `tag-down`, or `tag-insufficient`.
-- For a mobile-first financial-app layout, place the primary next-session tendency in `decision-tile` inside `hero-summary-strong`, then use `assessment-scoreboard` to separate absolute technical structure from relative context.
+- For a mobile-first financial-app layout, place the primary judgment in `decision-tile` inside `hero-summary-strong`, then use `assessment-scoreboard` to separate absolute technical structure from relative context.
 - Use `structure-panel-primary` for absolute technical structure and `structure-panel-secondary` for relative context. Relative context should read as supporting context, not the main tendency.
 - Use `quality-ribbon` when volume data, benchmark data, sector data, or other feature groups are `usable_with_limitations` or `insufficient`.
 - Use `app-strip` for compact high-signal facts such as confidence, data quality, technical classification, relative context, and material news stance.

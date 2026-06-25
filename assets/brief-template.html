@@ -29,7 +29,6 @@
       --red-line: #fecaca;
       --green-line: #bbf7d0;
       --blue-line: #bfdbfe;
-      --shadow-soft: 0 10px 28px rgba(15, 23, 42, .07);
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
@@ -49,7 +48,6 @@
       border-radius: 8px;
       background: var(--paper);
       border: 1px solid var(--line);
-      box-shadow: var(--shadow-soft);
     }
     .hero-top {
       position: relative;
@@ -66,20 +64,6 @@
       bottom: 0;
       height: 4px;
       background: var(--accent);
-    }
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      width: fit-content;
-      min-height: 24px;
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: var(--accent-soft);
-      color: var(--accent-strong);
-      font-size: 11px;
-      font-weight: 760;
-      letter-spacing: .06em;
-      text-transform: uppercase;
     }
     h1 {
       margin: 12px 0 10px;
@@ -101,7 +85,7 @@
       border-bottom: 1px solid var(--line-soft);
     }
     .hero-summary-strong {
-      grid-template-columns: minmax(148px, .42fr) 1fr;
+      grid-template-columns: minmax(150px, .38fr) 1fr;
       gap: 18px;
       align-items: stretch;
     }
@@ -115,6 +99,9 @@
       border: 1px solid var(--line);
       background: #ffffff;
     }
+    .decision-tile.tag-up, .decision-tile.tag-positive { border-color: var(--red-line); background: var(--up-soft); color: #b91c1c; }
+    .decision-tile.tag-down, .decision-tile.tag-cautious { border-color: var(--green-line); background: var(--down-soft); color: #047857; }
+    .decision-tile.tag-sideways, .decision-tile.tag-neutral, .decision-tile.tag-flat, .decision-tile.tag-insufficient { border-color: var(--line); background: var(--neutral-soft); color: var(--neutral); }
     .decision-tile-up { border-color: var(--red-line); background: #fffafa; }
     .decision-tile-sideways { border-color: var(--line); background: #f8fafc; }
     .decision-tile-down { border-color: var(--green-line); background: #fbfffc; }
@@ -126,7 +113,7 @@
     }
     .decision-value {
       margin-top: 8px;
-      color: var(--ink-strong);
+      color: currentColor;
       font-size: 26px;
       font-weight: 820;
       line-height: 1.12;
@@ -237,7 +224,6 @@
       border-radius: 8px;
       background: #ffffff;
       padding: 16px;
-      box-shadow: 0 8px 20px rgba(15, 23, 42, .045);
     }
     .assessment-up { border-color: var(--red-line); background: #fffafa; }
     .assessment-sideways { border-color: var(--line); background: #f8fafc; }
@@ -496,12 +482,14 @@
   <main class="page">
     <section class="hero">
       <div class="hero-top">
-        <div class="eyebrow">A股盘后研究记录</div>
         <h1>{{TITLE}}</h1>
         <div class="hero-meta">{{DATE}} · {{STOCK_LIST}}</div>
       </div>
-      <div class="hero-summary">
-        <span class="tag {{JUDGMENT_CLASS}}">{{JUDGMENT}}</span>
+      <div class="hero-summary hero-summary-strong">
+        <div class="decision-tile {{JUDGMENT_CLASS}}">
+          <span class="decision-label">盘后判断</span>
+          <strong class="decision-value">{{JUDGMENT}}</strong>
+        </div>
         <p class="summary-text">{{ONE_SENTENCE}}</p>
       </div>
     </section>
@@ -517,7 +505,7 @@
     {{POSITION_REVIEW_SECTION}}
 
     <div class="footer">
-      数据来源于万得 Wind 金融数据服务。仅供研究记录，不构成投资建议。
+      <strong>数据来源与免责声明：</strong>行情、K线、公告、新闻、指数和行业信息以报告正文标注的数据来源为准；未稳定命中外部链接时，行业与产业链部分主要采用 Wind 收录新闻作为背景。本文仅作盘后研究记录，不构成投资建议、收益承诺、目标价或确定性涨跌判断。
     </div>
   </main>
 </body>

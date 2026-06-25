@@ -78,7 +78,7 @@ npx github:SkyBridgeM/a-share-after-hours-brief-skill install
 
 ```bash
 mkdir -p ~/.codex/skills/a-share-after-hours-brief
-cp -R SKILL.md agents assets references scripts schemas examples \
+cp -R SKILL.md agents assets config references scripts schemas examples \
   ~/.codex/skills/a-share-after-hours-brief/
 ```
 
@@ -141,6 +141,39 @@ reports/
 - 损坏或不兼容的历史文件会以结构化 warning 呈现，不会静默跳过
 - 正式 schema 位于 `schemas/history-v1.schema.json`，示例记录位于 `examples/history-record.example.json`
 
+## 本地存储清理
+
+报告目录用久了以后，HTML、原始数据、日志和缓存会慢慢堆起来。这个 Skill 提供了一个本地清理脚本，默认只预览，不会直接删除文件；只有显式加上 `--apply`，才会真正清理。
+
+默认保留策略：
+
+| 类型 | 保留时间 |
+| --- | ---: |
+| HTML 报告 | 30 天 |
+| 图表 | 30 天 |
+| 原始数据 | 14 天 |
+| 缓存 | 7 天 |
+| 日志 | 14 天 |
+| history JSON | 90 天 |
+| 月度总结 | 长期保留 |
+
+先预览：
+
+```bash
+python3 scripts/cleanup_reports.py --root ./reports
+```
+
+确认无误后再删除：
+
+```bash
+python3 scripts/cleanup_reports.py \
+  --root ./reports \
+  --policy config/storage-policy.example.json \
+  --apply
+```
+
+脚本会列出准备删除的文件、预计释放的空间，以及跳过某些文件的原因。当前月份的文件不会删除。超过 90 天的 history JSON 也不会立刻删，只有同月份的月度总结已经存在时，脚本才允许清理对应的日度历史记录。
+
 ## 仓库结构
 
 ```text
@@ -151,6 +184,8 @@ reports/
 ├── assets/
 │   ├── brief-template.html
 │   └── plain-email-summary-template.md
+├── config/
+│   └── storage-policy.example.json
 ├── examples/
 │   └── history-record.example.json
 ├── references/
@@ -164,6 +199,7 @@ reports/
 ├── schemas/
 │   └── history-v1.schema.json
 └── scripts/
+    ├── cleanup_reports.py
     ├── correlation.py
     ├── kline_features.py
     └── review_journal.py
@@ -209,6 +245,18 @@ python3 scripts/review_journal.py build \
   --output-html ./reports/2026-06-16_A股盘后复盘.html
 ```
 
+预览本地存储清理：
+
+```bash
+python3 scripts/cleanup_reports.py --root ./reports
+```
+
+确认 dry-run 输出后，再执行删除：
+
+```bash
+python3 scripts/cleanup_reports.py --root ./reports --apply
+```
+
 ## 依赖
 
 - Python 3.10+
@@ -230,7 +278,7 @@ npm run check
 
 ```bash
 PYTHONPYCACHEPREFIX=/tmp/a-share-after-hours-brief-skill-pycache \
-python3 -m py_compile scripts/review_journal.py scripts/correlation.py scripts/kline_features.py
+python3 -m py_compile scripts/review_journal.py scripts/correlation.py scripts/kline_features.py scripts/cleanup_reports.py
 ```
 
 完整 `npm run check` 还会运行 Python 单元测试和 Node.js 安装器测试，测试依赖只使用标准库和 Node.js 内置模块。
@@ -243,7 +291,7 @@ python3 /path/to/skill-creator/scripts/quick_validate.py ./a-share-after-hours-b
 
 ## 数据和隐私
 
-生成的 HTML 报告、`history/*.json`、持仓记录和交易记录都保存在用户本地输出目录。这个 Skill 不会上传这些文件，也不会集中存储用户数据。
+生成的 HTML 报告、`history/*.json`、原始数据、缓存、持仓记录和交易记录都保存在用户本地输出目录。这个 Skill 不会上传这些文件，也不会集中存储用户数据。需要整理旧文件时，先用 `scripts/cleanup_reports.py` 预览，再决定是否删除。
 
 本仓库只包含可复用的 Skill 逻辑、模板和说明，不内置 Wind、Gmail 或其他 API 凭证。
 

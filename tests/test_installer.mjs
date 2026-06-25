@@ -31,6 +31,15 @@ test("normal install copies required entries", () => {
   const target = makeTempRoot();
   run(["install", "--target", target]);
   assert.equal(fs.existsSync(path.join(target, "a-share-after-hours-brief", "SKILL.md")), true);
+  assert.equal(
+    fs.existsSync(path.join(
+      target,
+      "a-share-after-hours-brief",
+      "config",
+      "storage-policy.example.json",
+    )),
+    true,
+  );
 });
 
 test("refuses to overwrite without --force", () => {

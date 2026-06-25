@@ -28,6 +28,7 @@ outputs/
 !examples/**/*.json
 !examples/**/*.csv
 !schemas/**/*.json
+!config/**/*.json
 
 # Logs and temporary files
 *.log

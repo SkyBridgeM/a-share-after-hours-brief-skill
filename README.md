@@ -80,7 +80,7 @@ From the repository root, copy the skill files into the expected skill directory
 
 ```bash
 mkdir -p ~/.codex/skills/a-share-after-hours-brief
-cp -R SKILL.md agents assets references scripts schemas examples \
+cp -R SKILL.md agents assets config references scripts schemas examples \
   ~/.codex/skills/a-share-after-hours-brief/
 ```
 
@@ -153,6 +153,39 @@ History rules:
 - Malformed history files are skipped with structured warnings instead of being silently ignored.
 - The formal schema lives at `schemas/history-v1.schema.json`; a sample record is available at `examples/history-record.example.json`.
 
+## Local storage cleanup
+
+The skill includes a local cleanup helper for report folders that grow over time. It previews the cleanup by default and deletes files only when `--apply` is passed.
+
+Default retention:
+
+| Type | Retention |
+| --- | ---: |
+| HTML reports | 30 days |
+| Charts | 30 days |
+| Raw data | 14 days |
+| Cache | 7 days |
+| Logs | 14 days |
+| History JSON | 90 days |
+| Monthly summaries | Keep forever |
+
+Preview cleanup:
+
+```bash
+python3 scripts/cleanup_reports.py --root ./reports
+```
+
+Apply cleanup:
+
+```bash
+python3 scripts/cleanup_reports.py \
+  --root ./reports \
+  --policy config/storage-policy.example.json \
+  --apply
+```
+
+The script prints the files it would delete, the estimated space that would be freed, and the files it skipped with reasons. It never deletes current-month files. History JSON older than 90 days is deleted only when a monthly summary for the same month already exists, so daily review records are not removed before a monthly archive is in place.
+
 ## Repository structure
 
 ```text
@@ -163,6 +196,8 @@ History rules:
 ├── assets/
 │   ├── brief-template.html
 │   └── plain-email-summary-template.md
+├── config/
+│   └── storage-policy.example.json
 ├── examples/
 │   └── history-record.example.json
 ├── references/
@@ -176,6 +211,7 @@ History rules:
 ├── schemas/
 │   └── history-v1.schema.json
 └── scripts/
+    ├── cleanup_reports.py
     ├── correlation.py
     ├── kline_features.py
     └── review_journal.py
@@ -221,6 +257,18 @@ python3 scripts/review_journal.py build \
   --output-html ./reports/2026-06-16_A-share-after-hours-brief.html
 ```
 
+Preview local storage cleanup:
+
+```bash
+python3 scripts/cleanup_reports.py --root ./reports
+```
+
+Delete the listed files after reviewing the dry-run output:
+
+```bash
+python3 scripts/cleanup_reports.py --root ./reports --apply
+```
+
 ## Requirements
 
 - Python 3.10+
@@ -242,7 +290,7 @@ You can also check the Python scripts directly:
 
 ```bash
 PYTHONPYCACHEPREFIX=/tmp/a-share-after-hours-brief-skill-pycache \
-python3 -m py_compile scripts/review_journal.py scripts/correlation.py scripts/kline_features.py
+python3 -m py_compile scripts/review_journal.py scripts/correlation.py scripts/kline_features.py scripts/cleanup_reports.py
 ```
 
 The full check also runs Python unit tests and Node.js installer tests using only standard-library and built-in runtime features.
@@ -255,7 +303,7 @@ python3 /path/to/skill-creator/scripts/quick_validate.py ./a-share-after-hours-b
 
 ## Data and privacy
 
-Generated HTML reports, `history/*.json`, holding records, and trade records stay in the user's local output folder. The skill does not upload them or store them in a central service.
+Generated HTML reports, `history/*.json`, raw data, cache files, holding records, and trade records stay in the user's local output folder. The skill does not upload them or store them in a central service. Use `scripts/cleanup_reports.py` when you want to review or prune old local artifacts.
 
 This repository only includes reusable skill logic, templates, and documentation. It does not include Wind, Gmail, or other API credentials.
 
