@@ -1,6 +1,6 @@
 {
   "name": "a-share-after-hours-brief-skill",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Codex skill for A-share after-hours stock review with portable JSON history.",
   "license": "MIT",
   "type": "module",
